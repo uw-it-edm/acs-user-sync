@@ -13,3 +13,6 @@ jspm_packages
 *.ipr
 *.iws
 .idea
+
+# Configuration files
+resources.yml
