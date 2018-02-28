@@ -4,7 +4,9 @@ const kms = new KMS();
 const decryptedDictionary = new Map();
 const isBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$/;
 
-async function kmsDecrypt(ciphertext: string): Promise<string> {
+export default async function kmsDecrypt(ciphertext: string): Promise<string> {
+
+    ciphertext = ciphertext.trim();
     if (decryptedDictionary.has(ciphertext)) {
         return decryptedDictionary.get(ciphertext)
     } else if (!isBase64.test(ciphertext) || process.env.DISABLE_KMS_DECRYPTION) {
@@ -25,14 +27,4 @@ async function kmsDecrypt(ciphertext: string): Promise<string> {
     decryptedDictionary.set(ciphertext, decrypted);
 
     return decrypted
-}
-
-export default async function decrypt(
-    ciphertext: string | ReadonlyArray<string>
-): Promise<string | ReadonlyArray<string>> {
-    if (typeof ciphertext === 'string') {
-        return kmsDecrypt(ciphertext)
-    }
-
-    return Promise.all(ciphertext.map(text => kmsDecrypt(text)))
 }
