@@ -9,7 +9,7 @@ export class GWS {
     private passphrase: string;   // key passphrase
     private xml2js = require('xml-js');
     constructor(gwsUrlBase:string, ca:string, cert:string, key:string, passphrase:string) {
-        this.gwsUrlPrefix = gwsUrlBase + '/group_sws/v2/search?type=effective&stem=u_edms&member=';
+        this.gwsUrlPrefix = gwsUrlBase;
         this.ca = ca;
         this.cert = cert;
         this.key = key;
@@ -19,18 +19,17 @@ export class GWS {
     private parseGroups(groupsStr: string): Group[] {
         // parse the return
         let obj: any;
-        obj = this.xml2js.xml2json(groupsStr, {compact: true, ignoreAttributes: false, spaces: 1});
-        obj = JSON.parse(obj);
-        obj = obj.html.body.div.ul.li;
+        const jsonstrGroups = this.xml2js.xml2json(groupsStr, {compact: true, ignoreAttributes: false, spaces: 1});
+        const jsonGroups = JSON.parse(jsonstrGroups);
+        const jsonGroupList = jsonGroups.html.body.div.ul.li;
 
-        let groups: Group[] = [];
-        let group: Group;
-        if (obj) {
-            obj.forEach((g) => {
-                group = new Group();
-                group.id = g.ul.li.a._text;
+        const groups: Group[] = [];
+        if (jsonGroupList) {
+            jsonGroupList.forEach((g) => {
+                const group = new Group();
+                group.id = g.ul.li.a._text;  // group Id is stored as text in anchor element.
                 groups.push(group);
-                let gdata = g.span;
+                const gdata = g.span;
                 gdata.forEach((e) => {
                     if (e._attributes.class == 'title') {
                         group.displayName = e._text;
@@ -57,7 +56,8 @@ export class GWS {
 
         await request.get(options, (err, response, body) => {
             if (err) {
-                console.log(new Date() + ' ERROR - GWS returned error for user ' + userName + ': ' + JSON.stringify(err))
+                delete err['options'];  // options could contain sensitive data
+                console.log('ERROR - GWS returned error for user ' + userName + ': ' + JSON.stringify(err))
                 throw(err);
             } else {
                 retv = this.parseGroups(body);

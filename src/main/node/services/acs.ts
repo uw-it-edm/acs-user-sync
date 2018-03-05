@@ -14,6 +14,12 @@ export class ACS {
         };
     }
 
+    private logError(err:any, msg) {
+        // err.options includes auth.pass. remove it before logging the error
+        delete err['options'];
+        console.log((msg ? msg : '') + ' ' + JSON.stringify(err));
+    }
+
     // create a new user
     async createUser(user: User): Promise<void>  {
         const options = {
@@ -25,9 +31,7 @@ export class ACS {
             if ( err.statusCode == 409 ) {
                 // user already exists, noop
             } else {
-                // err.options includes auth.pass. remove it before logging the error
-                delete err['options'];
-                console.log(new Date() + ' ERROR - createUser returned error for user ' + user.userName + ': ' + JSON.stringify(err));
+                this.logError(err, 'ERROR - createUser returned error for user ' + user.userName);
                 throw(err);
             }
         });
@@ -42,16 +46,14 @@ export class ACS {
         }
         await request.get(options, (err, response, body) => {
             if (err) {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - getUserGroups returned error for user ' + userName + ': ' + JSON.stringify(err))
+                this.logError(err, 'ERROR - getUserGroups returned error for user ' + userName)
                 throw(err);
             } else {
                 retv = JSON.parse(body).groups;
             }
         })
         .catch((err) => {
-             delete err['options'];
-             console.log(new Date() + ' ERROR - getUserGroups returned error for user ' + userName + ': ' + JSON.stringify(err))
+             this.logError(err, 'ERROR - getUserGroups returned error for user ' + userName) 
              throw(err);
         });
 
@@ -60,21 +62,21 @@ export class ACS {
 
     // displayName is null for a person, but may be set for a group member.
     async addMember(groupId:string, memberId:string, displayName:string = ''): Promise<void> {
-        console.log(new Date() + ' INFO - add ' + memberId + ' to group ' + groupId);
+        const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
+        console.log('INFO - add ' + memberId + ' to group ' + groupId);
         let body = displayName ? { displayName: displayName } : {};
         const options = {
-            url: this.acsUrlPrefix + '/groups/' + groupId + '/children/' + memberId,
+            url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
         }
         await request.post(options).json(body)
         .catch((err) => {
             if ( err.statusCode == 404 ) {
                 // group does not exist, let caller create it first 
-                console.log(new Date() + ' WARN - addMember: ' + groupId + ', does not exist. Need to create it.')
+                console.log('WARN - addMember: ' + gid + ', does not exist. Need to create it.')
                 throw(err);
             } else {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - addMember(' + groupId + ',' + memberId + ') returned error: ' + JSON.stringify(err))
+                this.logError(err, 'ERROR - addMember(' + gid + ',' + memberId + ') returned error')
                 throw(err);
             }
         });
@@ -82,7 +84,7 @@ export class ACS {
 
     async deleteMember(groupId:string, memberId:string): Promise<void> {
         const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
-        console.log(new Date() + ' INFO - delete ' + memberId + ' from group ' + gid);
+        console.log('INFO - delete ' + memberId + ' from group ' + gid);
         const options = {
             url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
@@ -90,10 +92,9 @@ export class ACS {
         await request.delete(options)
         .catch((err) => {
             if ( err.statusCode == 404 ) {
-                console.log(new Date() + ' WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
+                console.log('WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
             } else {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - deleteMember(' + groupId + ',' + memberId + ') returned error: ' + JSON.stringify(err))
+                this.logError(err, 'ERROR - deleteMember(' + groupId + ',' + memberId + ') returned error')
                 throw(err);
             }
         });
@@ -127,7 +128,7 @@ export class ACS {
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
                         delete err['options'];
-                        console.log(new Date() + ' ERROR - addMember(' + key + ',' + userName + ') returned error: ' + JSON.stringify(err))
+                        console.log('ERROR - addMember(' + key + ',' + userName + ') returned error: ' + JSON.stringify(err))
                         throw(err);
                     }
                 });

@@ -23,7 +23,6 @@ export class PWS {
         user.firstName = obj.RegisteredFirstMiddleName;;
         user.lastName  = obj.RegisteredSurname;;
         user.email = obj.UWNetID + '@uw.edu';
-        //user.password = obj.UWRegID;
         return user;
     }
 
@@ -40,15 +39,17 @@ export class PWS {
 
         let retv: any;
 
-        await request.get(options, (err, response, body) => {
-            if (err) {
-                console.log(new Date() + ' ERROR - PWS returned error for user ' + username + ': ' + JSON.stringify(err))
-                throw(err);
-            } else if (response && response.statusCode === 404) {
-                console.log(new Date() + ' ERROR - user ' + username + ' not found in PWS')
-                throw(body);
-            } else {
+        await request.get(options)
+               .then((body) => {
                 retv = this.parseUser(body);
+        }).catch((err)=>{
+            if (err && err.statusCode == 404) {
+                console.log('WARN - user ' + username + ' not found in PWS')
+                retv = null;
+            } else if (err) {
+                delete err['options'];  // options could contain sensitive data
+                console.log('ERROR - PWS returned error for user ' + username + ': ' + JSON.stringify(err))
+                throw(err);
             }
         });
 

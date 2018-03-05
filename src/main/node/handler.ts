@@ -2,13 +2,19 @@ import {ACS} from "./services/acs";
 import {GWS} from "./services/gws";
 import {PWS} from "./services/pws";
 import {Group} from "./model/group";
+import {User} from "./model/user";
 import {APIGatewayEvent, Callback, Context, Handler} from "aws-lambda";
-import kmsDecrypt from './utils/kms'
+import { KMS } from 'aws-sdk'
+
+// get authorized Ips directly from environment for quick authorization check
+const authorizedIps: string = process.env.authorizedIps || '';
+const usernameKey = process.env.usernameKey || '';
 
 // variables to hold services
 const aws = require('aws-sdk');
 const s3 = new aws.S3();
-var acs: any = null;
+var config:any = null;
+var acs: any;
 var gws: any;
 var pws: any;
 
@@ -21,17 +27,35 @@ async function getS3Object(bucket, key): Promise<any> {
     });
 }
 
+// helper function to decrypt base64-encoded encrypted data
+const kms = new KMS();
+const isBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$/;
+async function kmsDecrypt(ciphertext: string): Promise<string> {
+    ciphertext = ciphertext.trim(); // trim spaces from base64-encoded strings from config files
+    if (!isBase64.test(ciphertext) || process.env.DISABLE_KMS_DECRYPTION) {
+        // useful in development mode.
+        // Pass an unencrypted string, get back the same string.
+        return ciphertext
+    }
+
+    const params = {CiphertextBlob: Buffer.from(ciphertext, 'base64')};
+    const result = await kms.decrypt(params).promise();
+    const decrypted = result.Plaintext ? result.Plaintext.toString() : ciphertext;
+
+    return decrypted
+}
+
 // init
-async function init() {
-    if (acs) {
-        return;
+async function init(): Promise<any> {
+    if (config) {
+        return config;
     }
 
     // download config from S3
     const configBucket = process.env.CONFIG_BUCKET || '';
     const configKey = process.env.CONFIG_KEY || '';
     const configJson = await getS3Object(configBucket, configKey);
-    const config:any = JSON.parse(configJson);
+    config = JSON.parse(configJson);
 
     // download CA and client certs from S3
     const caCert = await getS3Object(config.caCertS3Bucket, config.caCertS3Key);
@@ -47,17 +71,28 @@ async function init() {
     gws = new GWS(config.gwsUrlBase, caCert, clientCert, clientCertKey, passphrase);
     pws = new PWS(config.pwsUrlBase, caCert, clientCert, clientCertKey, passphrase);
 
-    console.log(new Date() + ' INFO - initialized services');
+    console.log('INFO - initialized services');
+
+    return config;
 }
 
 async function syncOneUser(username) {
-    console.log(new Date() + ' INFO - start sync user ' + username);
+    console.log('INFO - start sync user ' + username);
 
     // call pws to get user name, email etc.
-    const user = await pws.getUser(username); 
+    let user = await pws.getUser(username); 
 
     // call gws to get user groups
     const groups = await gws.getGroups(username); 
+
+    // handle shared netid
+    if ( !user && (groups && groups.length > 0)) {
+        user = new User();
+        user.userName = username;
+        user.firstName = username;
+        user.lastName  = username;
+        user.email = username + '@uw.edu';
+    }
 
     // call acs to create new user
     await acs.createUser(user);
@@ -65,49 +100,65 @@ async function syncOneUser(username) {
     // add user to groups
     await acs.syncUserGroups(username, groups);
 
-    console.log(new Date() + ' INFO - end sync user ' + username);
+    console.log('INFO - end sync user ' + username);
+}
+
+async function errorCallback(callback, statusCode, message) {
+    console.log(message);
+    const response = {
+        statusCode: statusCode,
+        body: JSON.stringify({ message: message })
+    };
+    callback(null, response);
 }
 
 export const syncUser: Handler = async (event: APIGatewayEvent, context: Context, callback: Callback) => {
+    // check authorization
+    if (   ! event || !event.requestContext || !event.requestContext.identity
+        || authorizedIps.indexOf(event.requestContext.identity.sourceIp) < 0 ) {
+        await errorCallback(callback, 403, 'Fobidden');
+        return;
+    }
+
+
+    let headers: any = event.headers;
     let response: any;
-
-    await init();
-
-    // the username is supposed at event.pathParameters.username
-    // but is at event.path.username for offline test. Handle both.
-    let pathpars: any = event && event.pathParameters;
-    if ( ! pathpars) {
-        pathpars = event && event.path;
-    } 
-
-    if ( pathpars && pathpars.username ) {
-        let username = pathpars.username;
+    if (headers &&  headers[usernameKey] ) {
+        // get user from header
+        const username = headers[usernameKey];
+        const host = headers['X-Forwarded-Host'];
+        const stage = event.requestContext.stage;
+        const redirectPath = event.queryStringParameters && event.queryStringParameters.redirectPath || '';
     
+        if ( !username) {
+            await errorCallback(callback, 400, 'Bad Request. Please provide username in HTTP header with key ' + usernameKey);
+            return;
+        }
+    
+        await init();
+
         try {
             await syncOneUser(username);
-            response = {
-                statusCode: 200,
-                body: JSON.stringify({
-                    message: username + ' was synchronized successfully',
-                    input: event
-                })
-            };
+            
+            if (host && redirectPath) {
+                response = {
+                    statusCode: 302,
+                    headers: {
+                      Location: 'https://' + host + (redirectPath.startsWith('/') ? '' : '/') + redirectPath 
+                    },
+                    body: ''
+                };
+            } else {
+                response = {statusCode: 200, body: JSON.stringify({message: username + ' was synchronized successfully'})};
+            }
+            callback(null, response);
         } catch (err) {
             // err.options includes auth.pass. remove it before logging the error
             delete err['options'];
-            console.log(new Date() + ' ERROR - error sync user ' + username + ': ' + JSON.stringify(err));
-            response = err;
+            console.log('ERROR - error sync user ' + username + ': ' + JSON.stringify(err));
+            callback(null, response = err);
         }
     } else {
-        console.log(new Date() + ' ERROR - bad request, no username');
-        response = {
-            statusCode: 400,
-            body: JSON.stringify({
-                message: 'bad request. path should be /acs/user/{username}/sync',
-                input: event
-            })
-        };
+        await errorCallback(callback, 400, 'bad request');
     }
-
-    callback(null, response);
 }
