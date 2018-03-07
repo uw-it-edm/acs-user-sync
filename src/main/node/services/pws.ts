@@ -9,7 +9,7 @@ export class PWS {
     private passphrase: string;   // key passphrase
     private xml2js = require('xml-js');
     constructor(pwsUrlBase:string, ca:string, cert:string, key:string, passphrase:string) {
-        this.pwsUrlPrefix = pwsUrlBase + '/identity/v1/person/';
+        this.pwsUrlPrefix = pwsUrlBase;
         this.ca = ca;
         this.cert = cert;
         this.key = key;
