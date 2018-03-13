@@ -10,7 +10,8 @@ import { KMS } from 'aws-sdk'
 // get authorized Ips directly from environment for quick authorization check
 const authorizedIps: string = process.env.authorizedIps || '';
 const usernameKey = process.env.usernameKey || '';
-const gwsKey = process.env.gwsKey || '';
+const gwsKeyEncrypted = process.env.gwsKey || '';
+var gwsKey;   // to be set during init.
 
 // variables to hold services
 const aws = require('aws-sdk');
@@ -101,6 +102,7 @@ async function init(): Promise<any> {
     // descrypt client cert key passphrase and admin password
     const passphrase  =  await kmsDecrypt(config.clientCertKeyPassphrase);
     const acsAdminPassword = await kmsDecrypt(config.acsAdminPassword);
+    gwsKey =  await kmsDecrypt(gwsKeyEncrypted);
 
     // create services
     acs = new ACS(config.acsUrlBase, config.acsAdminUsername, acsAdminPassword);
