@@ -37,24 +37,45 @@ export class ACS {
         });
     }
 
-    // get user groups 
-    async getUserGroups(userName: string): Promise<any>  {
-        let retv: Group[] = [];
+    // get user 
+    async getUser(username: string, wantGroups:boolean=false): Promise<any>  {
+        let retv: any = null;
         const options = {
-            url: this.acsUrlPrefix + '/people/' + userName + '?groups=true',
+            url: this.acsUrlPrefix + '/people/' + username + (wantGroups ? '?groups=true' : ''),
             auth: this.auth
         }
         await request.get(options, (err, response, body) => {
-            if (err) {
-                this.logError(err, 'ERROR - getUserGroups returned error for user ' + userName)
-                throw(err);
-            } else {
-                retv = JSON.parse(body).groups;
-            }
+            retv = JSON.parse(body);
         })
         .catch((err) => {
-             this.logError(err, 'ERROR - getUserGroups returned error for user ' + userName) 
-             throw(err);
+            if ( err.statusCode &&  err.statusCode != 404) {
+                this.logError(err, 'ERROR - getUser returned error for user ' + username) 
+            }
+            throw(err);
+        });
+
+        return retv;
+    }
+
+    // get user groups 
+    async getUserGroups(username: string): Promise<any>  {
+        const user:any = await this.getUser(username, true);
+        return (user && user.groups && user.groups);
+    }
+
+    // get members of a group 
+    async getMembers(groupId: string): Promise<any>  {
+        let retv: string[] = [];
+        const options = {
+            url: this.acsUrlPrefix + '/groups/' + groupId+ '/children?authorityType=USER',
+            auth: this.auth
+        }
+        await request.get(options, (err, response, body) => {
+            retv = JSON.parse(body).data;
+        })
+        .catch((err) => {
+                this.logError(err, 'ERROR 2 - getMembers returned error for group ' + groupId)
+                throw(err);
         });
 
         return retv;
@@ -102,10 +123,10 @@ export class ACS {
 
     // sync ACS groups to UW groups for a given user
     async syncUserGroups(userName: string, groups: Group[]): Promise<void> {
-        let existingGroups = await this.getUserGroups(userName);
+        const existingGroups = await this.getUserGroups(userName);
 
         // find diff of the two groups
-        let gmap = new Map<string, string>();
+        const gmap = new Map<string, string>();
         existingGroups.forEach((g) => {
             gmap.set(g.itemName, '');  // empty displayName indicates existing group
         });
@@ -127,14 +148,55 @@ export class ACS {
                         this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
-                        delete err['options'];
-                        console.log('ERROR - addMember(' + key + ',' + userName + ') returned error: ' + JSON.stringify(err))
+                        this.logError(err, 'ERROR - addMember(' + key + ',' + userName + ') returned error: ')
                         throw(err);
                     }
                 });
             } else if (key.startsWith("GROUP_u_edms"))  {
                 await this.deleteMember(key, userName)
             }
+        }
+    }
+
+    // sync ACS group members to UW group members 
+    async syncGroupMembers(groupId: string, gwsMembers: string[]): Promise<void> {
+        const acsMembers = await this.getMembers(groupId)
+                           .catch((err)=> { 
+                               if (err.statusCode == 404) { // group does not exist, need to create it first
+                                   this.addMember(ACS.UW_ROOT_GROUP_ID, 'GROUP_' + groupId, groupId)
+                                   .then(() => { this.getMembers(groupId);}); // try again
+                               }
+                           });
+
+        // find diff of the two member list 
+        const mmap = new Map<string, string>();
+        acsMembers && acsMembers.forEach((m) => {
+            mmap.set(m.shortName, 'acs');  // user in acs group
+        });
+
+        gwsMembers.forEach((m) => {
+            if (mmap.has(m)) {
+                mmap.delete(m);       // user in both, no change required.
+            } else {
+                mmap.set(m, 'gws');   // user in uw group only, will be added to ACS group 
+            }
+        });
+
+        for (let [key, value] of Array.from(mmap.entries())) {
+            if (value == 'acs') {
+                await this.deleteMember(groupId, key)
+            } else if (value == 'gws') {
+                // check to see if the user exists in acs
+                await this.getUser(key)
+                .then(()=>{
+                    this.addMember(groupId, key)
+                    .catch((err)=>{
+                        this.logError(err, 'ERROR - addMember(' + groupId + ',' + key+ ') returned error: ')
+                        throw(err);
+                    })})
+                .catch((err)=>{
+                });
+            } // else never happens
         }
     }
 }

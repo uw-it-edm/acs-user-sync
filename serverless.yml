@@ -6,25 +6,20 @@ service: acs-user-sync
 
 custom:
   stage: ${opt:stage, self:provider.stage}
-  local:
-    CONFIG_KEY: "acs-user-sync/local/local-acs-user-sync.json"
-  dev:
-    CONFIG_KEY: "acs-user-sync/dev/dev-acs-user-sync.json"
-  test:
-    CONFIG_KEY: "acs-user-sync/test/test-acs-user-sync"
-  prod:
-    CONFIG_KEY: "acs-user-sync/prod/prod-acs-user-sync.json"
 
 provider:
   name: aws
   runtime: nodejs6.10
   memorySize: 128
-  timeout: 10
+  timeout: 20
   stage: "dev"
   region: "us-west-2"
   environment:
-    CONFIG_BUCKET: "uwit-cs-all-config"
-    CONFIG_KEY: "${self:custom.${self:custom.stage}.CONFIG_KEY}"
+    CONFIG_BUCKET: "${file(./resources.yml):CONFIG_BUCKET}" 
+    CONFIG_KEY: "${file(./resources.yml):${self:custom.stage}.CONFIG_KEY}"
+    authorizedIps: "${file(./resources.yml):${self:custom.stage}.authorizedIps}"
+    usernameKey: ${file(./resources.yml):usernameKey}
+    gwsKey: ${file(./resources.yml):gwsKey}
 
   iamRoleStatements:
     - Effect: "Allow"
@@ -41,10 +36,14 @@ provider:
       Action:
         - "s3:GetObject"
       Resource: ${file(./resources.yml):s3Buckets}
-
+    - Effect: "Allow"
+      Action:
+        - sqs:DeleteMessage
+        - sqs:GetQueueUrl
+        - sqs:ReceiveMessage
+      Resource: ${file(./resources.yml):${self:custom.stage}.sqs}
 
 plugins:
-  - serverless-mocha-plugin
   - serverless-webpack
   - serverless-offline
 
@@ -53,15 +52,37 @@ functions:
     handler: src/main/node/handler.syncUser
     events:
       - http:
-          path: acs/user/{username}/sync
-          method: post
-          integration: lambda
+          path: acs-user-sync
+          method: any 
+          integration: lambda-proxy
           request:
-            parameters: 
-              paths: 
-                username: true
+            parameters:
+              querystrings:
+                redirectPath: false
     memorySize: 256
     timeout: 20s
+    vpc:
+      securityGroupIds:
+        - 'Ref': AcsUserSyncLambdaSecurityGroup
+      subnetIds: ${file(./resources.yml):${self:custom.stage}.subnetIds}
+
+  cron:
+    handler: src/main/node/handler.syncGroup
+    events:
+      - schedule: rate(5 minutes)
+        enabled: true
+    memorySize: 256
+    timeout: 20s
+    vpc:
+      securityGroupIds:
+        - 'Ref': AcsUserSyncLambdaSecurityGroup
+      subnetIds: ${file(./resources.yml):${self:custom.stage}.subnetIds}
+
+resources:
+  Resources:
+    AcsUserSyncLambdaSecurityGroup:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties: ${file(./resources.yml):AcsUserSyncLambdaSecurityGroupProperties}
 
 package:
   exclude:
