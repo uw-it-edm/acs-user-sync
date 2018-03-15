@@ -1,71 +1,34 @@
-import {ACS} from "./services/acs";
-import {GWS} from "./services/gws";
-import {PWS} from "./services/pws";
-import {SQS} from "./services/sqs";
-import {Group} from "./model/group";
-import {User} from "./model/user";
-import {APIGatewayEvent, Callback, Context, Handler} from "aws-lambda";
-import { KMS } from 'aws-sdk'
+import {ACS} from "./services/acs"
+import {GWS} from "./services/gws"
+import {KMS} from "./services/kms"
+import {PWS} from "./services/pws"
+import {SQS} from "./services/sqs"
+import {S3} from "./services/s3"
+import {Group} from "./model/group"
+import {User} from "./model/user"
+import {APIGatewayEvent, Callback, Context, Handler} from "aws-lambda"
 
 const HOST_HEADER_KEY = 'X-Forwarded-Host'
 
-// get authorized Ips directly from environment for quick authorization check
+// get environment variables
 const authorizedIps: string = process.env.authorizedIps || '';
-const usernameKey = process.env.usernameKey || '';
-const gwsKeyEncrypted = process.env.gwsKey || '';
 const awsRegion = process.env.awsRegion || '';
-const sqsQueueName = process.env.sqsQueueName || '';
 const emailDomain = process.env.emailDomain || '';
-var gwsKey;   // to be set during init.
+const usernameKey = process.env.usernameKey || '';
 
-// variables to hold services
-const aws = require('aws-sdk');
-const s3 = new aws.S3();
-var config:any = null;
-var acs: any;
-var gws: any;
-var pws: any;
-var sqs: any;
+// services
+const kms = new KMS(awsRegion);
+const s3 = new  S3(awsRegion);
+let config:any = null;
+let acs: any;
+let gws: any;
+let pws: any;
 
-///////////////////////////////////////////////////////////
-// helper functions
-async function getS3Object(bucket, key): Promise<any> {
-    return new Promise((resolve, reject) => {
-        return s3.getObject({ Bucket: bucket, Key: key}, (err, data) => {
-            err ? reject(err) : resolve(data.Body.toString('utf-8'));
-        });
-    });
-}
-
-// helper function to decrypt base64-encoded encrypted data
-const kms = new KMS();
-const isBase64 = /^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)$/;
-async function kmsDecrypt(ciphertext: string): Promise<string> {
-    ciphertext = ciphertext.trim(); // trim spaces from base64-encoded strings from config files
-    if (!isBase64.test(ciphertext) || process.env.DISABLE_KMS_DECRYPTION) {
-        // useful in development mode.
-        // Pass an unencrypted string, get back the same string.
-        return ciphertext
-    }
-
-    const params = {CiphertextBlob: Buffer.from(ciphertext, 'base64')};
-    const result = await kms.decrypt(params).promise();
-    const decrypted = result.Plaintext ? result.Plaintext.toString() : ciphertext;
-
-    return decrypted
-}
-
-// decrypt gws messages. encoding is 'base64' or 'binary'
-const crypto = require("crypto");
-function decryptMessage(keyB64, ivB64, text, encoding='base64') {
-    const keyBuffer = Buffer.from(keyB64, 'base64');
-    const ivBuffer = ivB64 ? Buffer.from(ivB64,'base64') : new Buffer(16); // IV, binary
-    const textStr= Buffer.from(text, 'base64').toString('utf-8');
-    const decipher = crypto.createDecipheriv('aes-128-cbc', keyBuffer, ivBuffer);
-    var result = decipher.update(text, encoding);
-    result += decipher.final();
-    return result;
-}
+// the following 4 variables are used for group sync only
+const gwsKeyEncrypted = process.env.gwsKey || '';
+let gwsKey;   // to be set during init.
+const sqsQueueName = process.env.sqsQueueName || '';
+let sqs: any;
 
 // convenience function
 async function errorCallback(callback, statusCode, message) {
@@ -96,18 +59,18 @@ async function init(): Promise<any> {
     // download config from S3
     const configBucket = process.env.CONFIG_BUCKET || '';
     const configKey = process.env.CONFIG_KEY || '';
-    const configJson = await getS3Object(configBucket, configKey);
+    const configJson = await s3.getObject(configBucket, configKey);
     config = JSON.parse(configJson);
 
     // download CA and client certs from S3
-    const caCert = await getS3Object(config.caCertS3Bucket, config.caCertS3Key);
-    const clientCert = await getS3Object(config.clientCertS3Bucket, config.clientCertS3Key);
-    const clientCertKey = await getS3Object(config.clientCertKeyS3Bucket, config.clientCertKeyS3Key);
+    const caCert = await s3.getObject(config.caCertS3Bucket, config.caCertS3Key);
+    const clientCert = await s3.getObject(config.clientCertS3Bucket, config.clientCertS3Key);
+    const clientCertKey = await s3.getObject(config.clientCertKeyS3Bucket, config.clientCertKeyS3Key);
 
     // descrypt client cert key passphrase and admin password
-    const passphrase  =  await kmsDecrypt(config.clientCertKeyPassphrase);
-    const acsAdminPassword = await kmsDecrypt(config.acsAdminPassword);
-    gwsKey =  await kmsDecrypt(gwsKeyEncrypted);
+    const passphrase  =  await kms.decrypt(config.clientCertKeyPassphrase);
+    const acsAdminPassword = await kms.decrypt(config.acsAdminPassword);
+    gwsKey =  await kms.decrypt(gwsKeyEncrypted);
 
     // create services
     acs = new ACS(config.acsUrlBase, config.acsAdminUsername, acsAdminPassword);
@@ -198,6 +161,21 @@ export const syncUser: Handler = async (event: APIGatewayEvent, context: Context
     }
 }
 
+///////////////////////////////////////////////////////////
+// the following is for group sync only
+
+// decrypt gws messages. encoding is 'base64' or 'binary'
+const crypto = require("crypto");
+function decryptMessage(keyB64, ivB64, text, encoding='base64') {
+    const keyBuffer = Buffer.from(keyB64, 'base64');
+    const ivBuffer = ivB64 ? Buffer.from(ivB64,'base64') : new Buffer(16); // IV, binary
+    const textStr= Buffer.from(text, 'base64').toString('utf-8');
+    const decipher = crypto.createDecipheriv('aes-128-cbc', keyBuffer, ivBuffer);
+    let result = decipher.update(text, encoding);
+    result += decipher.final();
+    return result;
+}
+
 async function syncOneGroup(groupId): Promise<any> {
     console.log('INFO - start sync group ' + groupId);
 
@@ -207,7 +185,6 @@ async function syncOneGroup(groupId): Promise<any> {
     console.log('INFO - end sync group ' + groupId);
 }
 
-///////////////////////////////////////////////////////////////
 // process group update messages
 async function processOneMessage(sqsMessage: any) {
     // receiptHandle required later to delete message from SQS 
