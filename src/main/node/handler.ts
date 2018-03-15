@@ -7,10 +7,15 @@ import {User} from "./model/user";
 import {APIGatewayEvent, Callback, Context, Handler} from "aws-lambda";
 import { KMS } from 'aws-sdk'
 
+const HOST_HEADER_KEY = 'X-Forwarded-Host'
+
 // get authorized Ips directly from environment for quick authorization check
 const authorizedIps: string = process.env.authorizedIps || '';
 const usernameKey = process.env.usernameKey || '';
 const gwsKeyEncrypted = process.env.gwsKey || '';
+const awsRegion = process.env.awsRegion || '';
+const sqsQueueName = process.env.sqsQueueName || '';
+const emailDomain = process.env.emailDomain || '';
 var gwsKey;   // to be set during init.
 
 // variables to hold services
@@ -131,7 +136,7 @@ async function syncOneUser(username) {
         user.userName = username;
         user.firstName = username;
         user.lastName  = username;
-        user.email = username + '@uw.edu';
+        user.email = username + emailDomain;
     }
 
     // call acs to create new user
@@ -156,7 +161,7 @@ export const syncUser: Handler = async (event: APIGatewayEvent, context: Context
     if (headers &&  headers[usernameKey] ) {
         // get user from header
         const username = headers[usernameKey];
-        const host = headers['X-Forwarded-Host'];
+        const host = headers[HOST_HEADER_KEY];
         const stage = event.requestContext.stage;
         const redirectPath = event.queryStringParameters && event.queryStringParameters.redirectPath || '';
     
@@ -251,7 +256,7 @@ async function processOneMessage(sqsMessage: any) {
 async function processSqsMessages() {
     // initialize sqs service if necessary
     if (!sqs) {
-        sqs = new SQS('us-west-2', 'uwit-cs-prod-gws-activity', 1);
+        sqs = new SQS(awsRegion, sqsQueueName, 1);
     }
 
     let hasMessages = true;

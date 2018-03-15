@@ -43,11 +43,8 @@ export class GWS {
     private parseMembers(groupStr: string): string[] {
         const jsonstrMembers = this.xml2js.xml2json(groupStr, {compact: true, ignoreAttributes: false, spaces: 1});
         const jsonMembers = JSON.parse(jsonstrMembers);
-//console.log(groupStr);
-//console.log(jsonMembers);
 
         const jsonMemberList = jsonMembers.html.body.div.ul.li;
-//console.log(jsonMemberList);
 
         const members: string[] = [];
         if (jsonMemberList) {
@@ -91,7 +88,6 @@ export class GWS {
     }
 
     async getMembers(groupId: string): Promise<string[]>  {
-        //const url = this.gwsGroupUrlBase + groupId + '/member';
         const url = this.gwsGroupUrlBase + groupId + '/effective_member';
         const body = await this.callGWS(url);
         return this.parseMembers(body);

@@ -18,8 +18,11 @@ provider:
     CONFIG_BUCKET: "${file(./resources.yml):CONFIG_BUCKET}" 
     CONFIG_KEY: "${file(./resources.yml):${self:custom.stage}.CONFIG_KEY}"
     authorizedIps: "${file(./resources.yml):${self:custom.stage}.authorizedIps}"
-    usernameKey: ${file(./resources.yml):usernameKey}
+    awsRegion: ${file(./resources.yml):awsRegion}
+    emailDomain: ${file(./resources.yml):emailDomain}
     gwsKey: ${file(./resources.yml):gwsKey}
+    sqsQueueName: ${file(./resources.yml):sqsQueueName}
+    usernameKey: ${file(./resources.yml):usernameKey}
 
   iamRoleStatements:
     - Effect: "Allow"
