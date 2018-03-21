@@ -88,10 +88,10 @@ async function syncOneUser(username) {
     console.log('INFO - start sync user ' + username);
 
     // call pws to get user name, email etc.
-    let user = await pws.getUser(username); 
+    let user = await pws.getUser(username);
 
     // call gws to get user groups
-    const groups = await gws.getGroups(username); 
+    const groups = await gws.getGroups(username);
 
     // handle shared netid
     if ( !user && (groups && groups.length > 0)) {
@@ -127,22 +127,22 @@ export const syncUser: Handler = async (event: APIGatewayEvent, context: Context
         const host = headers[HOST_HEADER_KEY];
         const stage = event.requestContext.stage;
         const redirectPath = event.queryStringParameters && event.queryStringParameters.redirectPath || '';
-    
+
         if ( !username) {
             await errorCallback(callback, 400, 'Bad Request. Please provide username in HTTP header with key ' + usernameKey);
             return;
         }
-    
+
         await init();
 
         try {
             await syncOneUser(username);
-            
+
             if (host && redirectPath) {
                 response = {
                     statusCode: 302,
                     headers: {
-                      Location: 'https://' + host + (redirectPath.startsWith('/') ? '' : '/') + redirectPath 
+                      Location: 'https://' + host + (redirectPath.startsWith('/') ? '' : '/') + redirectPath
                     },
                     body: ''
                 };
@@ -163,6 +163,28 @@ export const syncUser: Handler = async (event: APIGatewayEvent, context: Context
 
 ///////////////////////////////////////////////////////////
 // the following is for group sync only
+const ignoredGroupsStr = process.env.ignoredGroups || '';
+const ignoredGroups = ignoredGroupsStr.replace(/\s/g, '').toLowerCase().split(',');
+const ignoredGroupPrefixesStr = process.env.ignoredGroupPrefixes || '';
+const ignoredGroupPrefixes = ignoredGroupPrefixesStr.replace(/\s/g, '').toLowerCase().split(',');
+
+function isIgnoredGroup(group) {
+    // check for ignoredGroupPrefixes
+    for (let i=0; i<ignoredGroupPrefixes.length; i++) {
+        if (group && group.startsWith(ignoredGroupPrefixes[i])) {
+            return true;
+        }
+    }
+
+    // check for ignoredGroups
+    for (let i=0; i<ignoredGroups.length; i++) {
+        if (group && group==ignoredGroups[i]) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 // decrypt gws messages. encoding is 'base64' or 'binary'
 const crypto = require("crypto");
@@ -180,21 +202,18 @@ async function syncOneGroup(groupId): Promise<any> {
     console.log('INFO - start sync group ' + groupId);
 
     // call gws to get group members
-    const members = await gws.getMembers(groupId); 
-    await acs.syncGroupMembers(groupId, members); 
+    const members = await gws.getMembers(groupId);
+    await acs.syncGroupMembers(groupId, members);
     console.log('INFO - end sync group ' + groupId);
 }
 
 // process group update messages
 async function processOneMessage(sqsMessage: any) {
-    // receiptHandle required later to delete message from SQS 
+    // receiptHandle required later to delete message from SQS
     const receiptHandle = sqsMessage.ReceiptHandle
 
-    // delete SQS message, before receiptHandle expires
-    await sqs.deleteMessage(receiptHandle);
-
     const sqsBody = JSON.parse(sqsMessage.Body);     // sqs message body
-    const msgB64 = sqsBody.Message;                  // gws message, base64 encoded 
+    const msgB64 = sqsBody.Message;                  // gws message, base64 encoded
     const msgStr = Buffer.from(msgB64, 'base64').toString('utf-8');
     const msg = JSON.parse(msgStr)   ;               // gws message
 
@@ -205,29 +224,35 @@ async function processOneMessage(sqsMessage: any) {
 
     const action = msgContext.action;                // 'update-member', etc.
     const group = msgContext.group;                  // group ID
-    console.log('INFO - action='+action+', group='+group);
 
-    // the following two groups includes several hundreds thousands effective members. exclude them for now.
-    // u_edms_prod_edms-roles_pub.r
-    // u_edms_prod_edms-roles_pub-svr-00005-facilities-public.r
-    if (action && action != 'no-action' && group && group.startsWith('u_edms')
-        && group != 'u_edms_prod_edms-roles_pub.r'
-        && group != 'u_edms_prod_edms-roles_pub-svr-00005-facilities-public.r' ) {
+    // delete SQS message, before receiptHandle expires
+    await sqs.deleteMessage(receiptHandle);
+
+    if (action && action == 'update-members' && group && ! isIgnoredGroup(group)) {
+        console.log('INFO - processing action='+action+', group='+group);
         const ivB64 = header.iv;                      // initialization vector, base64 encoded
         const gwsBodyB64 = msg.body;                  // gws message body, base64 encoded, maybe encrypted
-        let gwsBody;
-/* TODO decrypting not working yet
+        let updateGroup: any;
         if (ivB64) {  // encrypted msg body
-            // gwsBody = decryptMessage(gwsKey, ivB64, gwsBodyB64);
+             const gwsBody = decryptMessage(gwsKey, ivB64, gwsBodyB64);
+             updateGroup = gws.parseUpdateMembers(gwsBody);
         } else {      // plain message body
-            gwsBody = Buffer.from(msgB64, 'base64').toString('utf-8');
+             const gwsBody = Buffer.from(gwsBodyB64, 'base64').toString('utf-8');
+             updateGroup = gws.parseUpdateMembers(gwsBody);
         }
-*/
 
-        // sync entire group before we figure out how to decrypt the message body
-        await syncOneGroup(group);
-
-    } // else not our message
+        // sync user with changed membership
+        for (let i=0; i<updateGroup.updateMembers.length; i++) {
+            const username = updateGroup.updateMembers[i];
+            const user = await acs.getUser(username);
+            if ( user ) {
+                const groups = await gws.getGroups(username);
+                await acs.syncUserGroups(username, groups);
+            }
+        }
+    } else {
+        console.log('INFO - ignored action='+action+', group='+group);
+    }
 }
 
 async function processSqsMessages() {

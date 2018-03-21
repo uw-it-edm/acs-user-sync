@@ -2,6 +2,8 @@ import * as request from "request-promise";
 import {User} from "../model/user";
 import {Group} from "../model/group";
 
+const HTTP_STATUS_CODE_FOR_NOT_FOUND = 404;
+
 export class ACS {
     private acsUrlPrefix: string;
     private auth: any;
@@ -46,12 +48,17 @@ export class ACS {
         }
         await request.get(options, (err, response, body) => {
             retv = JSON.parse(body);
+            if ( retv && retv.status && retv.status.code && retv.status.code==HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
+                retv = null;
+            }
         })
         .catch((err) => {
-            if ( err.statusCode &&  err.statusCode != 404) {
+            if ( err.statusCode && err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) {
+                retv = null;
+            } else {
                 this.logError(err, 'ERROR - getUser returned error for user ' + username) 
+                throw(err);
             }
-            throw(err);
         });
 
         return retv;
@@ -92,7 +99,7 @@ export class ACS {
         }
         await request.post(options).json(body)
         .catch((err) => {
-            if ( err.statusCode == 404 ) {
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 // group does not exist, let caller create it first 
                 console.log('WARN - addMember: ' + gid + ', does not exist. Need to create it.')
                 throw(err);
@@ -112,7 +119,7 @@ export class ACS {
         }
         await request.delete(options)
         .catch((err) => {
-            if ( err.statusCode == 404 ) {
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 console.log('WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
             } else {
                 this.logError(err, 'ERROR - deleteMember(' + groupId + ',' + memberId + ') returned error')
@@ -144,7 +151,7 @@ export class ACS {
             if (value) {
                 await this.addMember(key, userName)
                 .catch((err)=>{
-                    if ( err.statusCode == 404) { // group does not exist, need to create it first
+                    if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
                         this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
@@ -162,7 +169,7 @@ export class ACS {
     async syncGroupMembers(groupId: string, gwsMembers: string[]): Promise<void> {
         const acsMembers = await this.getMembers(groupId)
                            .catch((err)=> { 
-                               if (err.statusCode == 404) { // group does not exist, need to create it first
+                               if (err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
                                    this.addMember(ACS.UW_ROOT_GROUP_ID, 'GROUP_' + groupId, groupId)
                                    .then(() => { this.getMembers(groupId);}); // try again
                                }

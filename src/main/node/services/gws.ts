@@ -55,6 +55,32 @@ export class GWS {
         return members;
     }
 
+    private parseUpdateMembers(groupStr: string): any {
+        const jsonstr= this.xml2js.xml2json(groupStr, {compact: true, ignoreAttributes: false, spaces: 1});
+        const jsonobj = JSON.parse(jsonstr);
+
+        const retobj: any = {addMembers:[], deleteMembers:[], updateMembers:[]}
+        const group: any = jsonobj.group;
+        if (group && group['add-members']) {
+            const addMembers = group['add-members']['add-member']
+            const addMembersArray = addMembers instanceof Array ? addMembers : [addMembers]
+            addMembersArray && addMembersArray.forEach((e)=>{
+                retobj.addMembers.push(e._text);
+                retobj.updateMembers.push(e._text);
+            });
+        }
+
+        if (group && group['delete-members']) {
+            const deleteMembers = group['delete-members']['delete-member']
+            const deleteMembersArray = deleteMembers instanceof Array ? deleteMembers : [deleteMembers]
+            deleteMembersArray && deleteMembersArray.forEach((e)=>{
+                retobj.deleteMembers.push(e._text);
+                retobj.updateMembers.push(e._text);
+            });
+        }
+        return retobj;
+    }
+
     async callGWS(url): Promise<any>  {
         const options = {
             url: url,
