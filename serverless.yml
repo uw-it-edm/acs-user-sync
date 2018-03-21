@@ -74,7 +74,7 @@ functions:
   cron:
     handler: src/main/node/handler.syncGroup
     events:
-      - schedule: rate(10  minutes)
+      - schedule: rate(10 minutes)
         enabled: true
     memorySize: 256
     timeout: 20s
