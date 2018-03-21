@@ -150,9 +150,9 @@ export class ACS {
         for (let [key, value] of Array.from(gmap.entries())) {
             if (value) {
                 await this.addMember(key, userName)
-                .catch((err)=>{
+                .catch(async (err)=>{
                     if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
-                        this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
+                        await this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
                         this.logError(err, 'ERROR - addMember(' + key + ',' + userName + ') returned error: ')
