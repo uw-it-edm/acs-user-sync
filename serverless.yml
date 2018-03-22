@@ -95,3 +95,4 @@ package:
     - node_modules/aws-sdk-mock/**
     - node_modules/serverless/**
     - src/main/resources/**
+    - src/main/**/*.spec.ts
