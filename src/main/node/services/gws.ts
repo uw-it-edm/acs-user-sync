@@ -55,7 +55,7 @@ export class GWS {
         return members;
     }
 
-    private parseUpdateMembers(groupStr: string): any {
+    parseUpdateMembers(groupStr: string): any {
         const jsonstr= this.xml2js.xml2json(groupStr, {compact: true, ignoreAttributes: false, spaces: 1});
         const jsonobj = JSON.parse(jsonstr);
 

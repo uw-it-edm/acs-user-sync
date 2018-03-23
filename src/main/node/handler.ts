@@ -8,7 +8,7 @@ import {Group} from "./model/group"
 import {User} from "./model/user"
 import {APIGatewayEvent, Callback, Context, Handler} from "aws-lambda"
 
-const HOST_HEADER_KEY = 'X-Forwarded-Host'
+const HOST_HEADER_KEY = 'X-Forwarded-Host';
 
 // get environment variables
 const authorizedIps: string = process.env.authorizedIps || '';
@@ -19,16 +19,18 @@ const usernameKey = process.env.usernameKey || '';
 // services
 const kms = new KMS(awsRegion);
 const s3 = new  S3(awsRegion);
-let config:any = null;
-let acs: any;
-let gws: any;
-let pws: any;
+
+// export the following to support testing of functions in this module
+export let config:any = null;
+export let acs: ACS;
+export let gws: GWS;
+export let pws: PWS;
 
 // the following 4 variables are used for group sync only
 const gwsKeyEncrypted = process.env.gwsKey || '';
-let gwsKey;   // to be set during init.
+export let gwsKey;   // to be set during init.
 const sqsQueueName = process.env.sqsQueueName || '';
-let sqs: any;
+export let sqs: SQS;
 
 // convenience function
 async function errorCallback(callback, statusCode, message) {
@@ -115,8 +117,9 @@ async function syncOneUser(username) {
 // handler functions
 export const syncUser: Handler = async (event: APIGatewayEvent, context: Context, callback: Callback) => {
 
-    if ( ! isAuthorized ) {
+    if ( ! isAuthorized(event) ) {
         await errorCallback(callback, 403, 'Fobidden');
+        return;
     }
 
     let headers: any = event.headers;
@@ -125,7 +128,6 @@ export const syncUser: Handler = async (event: APIGatewayEvent, context: Context
         // get user from header
         const username = headers[usernameKey];
         const host = headers[HOST_HEADER_KEY];
-        const stage = event.requestContext.stage;
         const redirectPath = event.queryStringParameters && event.queryStringParameters.redirectPath || '';
 
         if ( !username) {
@@ -167,6 +169,7 @@ const ignoredGroupsStr = process.env.ignoredGroups || '';
 const ignoredGroups = ignoredGroupsStr.replace(/\s/g, '').toLowerCase().split(',');
 const ignoredGroupPrefixesStr = process.env.ignoredGroupPrefixes || '';
 const ignoredGroupPrefixes = ignoredGroupPrefixesStr.replace(/\s/g, '').toLowerCase().split(',');
+const messagesPerBatch = process.env.messagesPerBatch || 10;
 
 function isIgnoredGroup(group) {
     // check for ignoredGroupPrefixes
@@ -229,7 +232,7 @@ async function processOneMessage(sqsMessage: any) {
     await sqs.deleteMessage(receiptHandle);
 
     if (action && action == 'update-members' && group && ! isIgnoredGroup(group)) {
-        console.log('INFO - processing action='+action+', group='+group);
+        console.log('INFO - process action='+action+', group='+group);
         const ivB64 = header.iv;                      // initialization vector, base64 encoded
         const gwsBodyB64 = msg.body;                  // gws message body, base64 encoded, maybe encrypted
         let updateGroup: any;
@@ -251,7 +254,7 @@ async function processOneMessage(sqsMessage: any) {
             }
         }
     } else {
-        console.log('INFO - ignored action='+action+', group='+group);
+        console.log('INFO - ignore action='+action+', group='+group);
     }
 }
 
@@ -262,8 +265,7 @@ async function processSqsMessages() {
     }
 
     let hasMessages = true;
-    const maxIterations = 100; // to prevent infinite loop in case delete message failed
-    for (let i=0; i<maxIterations && hasMessages; i++) {
+    for (let i=0; i<messagesPerBatch && hasMessages; i++) {
         let msgResult = await sqs.getMessages();
         if (msgResult && msgResult.Messages) {
             let msgs = msgResult.Messages;
