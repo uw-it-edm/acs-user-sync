@@ -2,6 +2,8 @@ import * as request from "request-promise";
 import {User} from "../model/user";
 import {Group} from "../model/group";
 
+const HTTP_STATUS_CODE_FOR_NOT_FOUND = 404;
+
 export class ACS {
     private acsUrlPrefix: string;
     private auth: any;
@@ -12,6 +14,12 @@ export class ACS {
             'user': adminUser,
             'pass': adminPassword
         };
+    }
+
+    private logError(err:any, msg) {
+        // err.options includes auth.pass. remove it before logging the error
+        delete err['options'];
+        console.log((msg ? msg : '') + ' ' + JSON.stringify(err));
     }
 
     // create a new user
@@ -25,34 +33,56 @@ export class ACS {
             if ( err.statusCode == 409 ) {
                 // user already exists, noop
             } else {
-                // err.options includes auth.pass. remove it before logging the error
-                delete err['options'];
-                console.log(new Date() + ' ERROR - createUser returned error for user ' + user.userName + ': ' + JSON.stringify(err));
+                this.logError(err, 'ERROR - createUser returned error for user ' + user.userName);
                 throw(err);
             }
         });
     }
 
-    // get user groups 
-    async getUserGroups(userName: string): Promise<any>  {
-        let retv: Group[] = [];
+    // get user 
+    async getUser(username: string, wantGroups:boolean=false): Promise<any>  {
+        let retv: any = null;
         const options = {
-            url: this.acsUrlPrefix + '/people/' + userName + '?groups=true',
+            url: this.acsUrlPrefix + '/people/' + username + (wantGroups ? '?groups=true' : ''),
             auth: this.auth
         }
         await request.get(options, (err, response, body) => {
-            if (err) {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - getUserGroups returned error for user ' + userName + ': ' + JSON.stringify(err))
-                throw(err);
-            } else {
-                retv = JSON.parse(body).groups;
+            retv = JSON.parse(body);
+            if ( retv && retv.status && retv.status.code && retv.status.code==HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
+                retv = null;
             }
         })
         .catch((err) => {
-             delete err['options'];
-             console.log(new Date() + ' ERROR - getUserGroups returned error for user ' + userName + ': ' + JSON.stringify(err))
-             throw(err);
+            if ( err.statusCode && err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) {
+                retv = null;
+            } else {
+                this.logError(err, 'ERROR - getUser returned error for user ' + username) 
+                throw(err);
+            }
+        });
+
+        return retv;
+    }
+
+    // get user groups 
+    async getUserGroups(username: string): Promise<any>  {
+        const user:any = await this.getUser(username, true);
+        return (user && user.groups && user.groups);
+    }
+
+    // get members of a group 
+    async getMembers(groupId: string): Promise<any>  {
+        let retv: string[] = [];
+        const options = {
+            url: this.acsUrlPrefix + '/groups/' + groupId+ '/children?authorityType=USER',
+            auth: this.auth
+        }
+        await request.get(options, (err, response, body) => {
+            retv = JSON.parse(body).data;
+        })
+        .catch((err) => {
+                this.logError(err, 'ERROR 2 - getMembers returned error for group ' + groupId)
+                throw(err);
         });
 
         return retv;
@@ -60,21 +90,21 @@ export class ACS {
 
     // displayName is null for a person, but may be set for a group member.
     async addMember(groupId:string, memberId:string, displayName:string = ''): Promise<void> {
-        console.log(new Date() + ' INFO - add ' + memberId + ' to group ' + groupId);
+        const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
+        console.log('INFO - add ' + memberId + ' to group ' + groupId);
         let body = displayName ? { displayName: displayName } : {};
         const options = {
-            url: this.acsUrlPrefix + '/groups/' + groupId + '/children/' + memberId,
+            url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
         }
         await request.post(options).json(body)
         .catch((err) => {
-            if ( err.statusCode == 404 ) {
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 // group does not exist, let caller create it first 
-                console.log(new Date() + ' WARN - addMember: ' + groupId + ', does not exist. Need to create it.')
+                console.log('WARN - addMember: ' + gid + ', does not exist. Need to create it.')
                 throw(err);
             } else {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - addMember(' + groupId + ',' + memberId + ') returned error: ' + JSON.stringify(err))
+                this.logError(err, 'ERROR - addMember(' + gid + ',' + memberId + ') returned error')
                 throw(err);
             }
         });
@@ -82,18 +112,17 @@ export class ACS {
 
     async deleteMember(groupId:string, memberId:string): Promise<void> {
         const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
-        console.log(new Date() + ' INFO - delete ' + memberId + ' from group ' + gid);
+        console.log('INFO - delete ' + memberId + ' from group ' + gid);
         const options = {
             url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
         }
         await request.delete(options)
         .catch((err) => {
-            if ( err.statusCode == 404 ) {
-                console.log(new Date() + ' WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
+                console.log('WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
             } else {
-                delete err['options'];
-                console.log(new Date() + ' ERROR - deleteMember(' + groupId + ',' + memberId + ') returned error: ' + JSON.stringify(err))
+                this.logError(err, 'ERROR - deleteMember(' + groupId + ',' + memberId + ') returned error')
                 throw(err);
             }
         });
@@ -101,10 +130,10 @@ export class ACS {
 
     // sync ACS groups to UW groups for a given user
     async syncUserGroups(userName: string, groups: Group[]): Promise<void> {
-        let existingGroups = await this.getUserGroups(userName);
+        const existingGroups = await this.getUserGroups(userName);
 
         // find diff of the two groups
-        let gmap = new Map<string, string>();
+        const gmap = new Map<string, string>();
         existingGroups.forEach((g) => {
             gmap.set(g.itemName, '');  // empty displayName indicates existing group
         });
@@ -121,19 +150,60 @@ export class ACS {
         for (let [key, value] of Array.from(gmap.entries())) {
             if (value) {
                 await this.addMember(key, userName)
-                .catch((err)=>{
-                    if ( err.statusCode == 404) { // group does not exist, need to create it first
-                        this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
+                .catch(async (err)=>{
+                    if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
+                        await this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
-                        delete err['options'];
-                        console.log(new Date() + ' ERROR - addMember(' + key + ',' + userName + ') returned error: ' + JSON.stringify(err))
+                        this.logError(err, 'ERROR - addMember(' + key + ',' + userName + ') returned error: ')
                         throw(err);
                     }
                 });
             } else if (key.startsWith("GROUP_u_edms"))  {
                 await this.deleteMember(key, userName)
             }
+        }
+    }
+
+    // sync ACS group members to UW group members 
+    async syncGroupMembers(groupId: string, gwsMembers: string[]): Promise<void> {
+        const acsMembers = await this.getMembers(groupId)
+                           .catch((err)=> { 
+                               if (err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
+                                   this.addMember(ACS.UW_ROOT_GROUP_ID, 'GROUP_' + groupId, groupId)
+                                   .then(() => { this.getMembers(groupId);}); // try again
+                               }
+                           });
+
+        // find diff of the two member list 
+        const mmap = new Map<string, string>();
+        acsMembers && acsMembers.forEach((m) => {
+            mmap.set(m.shortName, 'acs');  // user in acs group
+        });
+
+        gwsMembers.forEach((m) => {
+            if (mmap.has(m)) {
+                mmap.delete(m);       // user in both, no change required.
+            } else {
+                mmap.set(m, 'gws');   // user in uw group only, will be added to ACS group 
+            }
+        });
+
+        for (let [key, value] of Array.from(mmap.entries())) {
+            if (value == 'acs') {
+                await this.deleteMember(groupId, key)
+            } else if (value == 'gws') {
+                // check to see if the user exists in acs
+                await this.getUser(key)
+                .then(()=>{
+                    this.addMember(groupId, key)
+                    .catch((err)=>{
+                        this.logError(err, 'ERROR - addMember(' + groupId + ',' + key+ ') returned error: ')
+                        throw(err);
+                    })})
+                .catch((err)=>{
+                });
+            } // else never happens
         }
     }
 }

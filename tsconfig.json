@@ -8,5 +8,8 @@
     "moduleResolution": "node",
     "lib": ["es2015"],
     "rootDir": "./"
-  }
+  },
+  "exclude": [
+    "./src/**/*.spec.ts"
+  ]
 }
