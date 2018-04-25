@@ -8,10 +8,12 @@
   },
   "devDependencies": {
     "@types/aws-lambda": "0.0.22",
+    "@types/mocha": "^5.2.0",
     "@types/node": "^9.4.0",
     "@types/request": "^2.47.0",
+    "chai": "^4.1.2",
     "js-yaml": "^3.10.0",
-    "serverless-mocha-plugin": "^1.7.0",
+    "mocha": "^5.1.1",
     "serverless-offline": "^3.18.0",
     "serverless-webpack": "^4.2.0",
     "ts-loader": "^2.3.7",
