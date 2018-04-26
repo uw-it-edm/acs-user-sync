@@ -54,15 +54,6 @@ plugins:
 functions:
   sync-user:
     handler: src/main/node/handler.syncUser
-    events:
-      - http:
-          path: acs-user-sync
-          method: any 
-          integration: lambda-proxy
-          request:
-            parameters:
-              querystrings:
-                redirectPath: false
     memorySize: 256
     timeout: 20s
     vpc:

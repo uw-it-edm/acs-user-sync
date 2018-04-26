@@ -9,9 +9,7 @@ develop [![Build Status](https://travis-ci.org/uw-it-edm/acs-user-sync.svg?branc
 ```
 yarn install
 
-sls offline start  --stage=local  
-
-curl -X POST localhost:3000/acs/user/<username>/sync  
+serverless invoke local --function sync-user --stage=local --data '{"headers":{"example-username-key":"test-user"}}'  
 ```
 ## Test
 yarn test
