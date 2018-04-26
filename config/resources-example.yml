@@ -1,0 +1,27 @@
+AcsUserSyncLambdaSecurityGroupProperties:
+  GroupName: 'example-acs-user-sync-lambda-security-group-name'
+  GroupDescription: Group to allow ${self:service} to connect to internal load balancer
+  SecurityGroupEgress:
+    - example1
+    - example2
+  VpcId: "${file(./config/resources-${self:custom.stage}.yml):vpcId}"
+
+awsRegion: "us-west-2"
+CONFIG_BUCKET: "example-config-bucket"
+CONFIG_KEY: "example-acs-user-sync.json"
+emailDomain: "@example.com"
+gwsKey: "exampleEncryptionKey"
+ignoredGroups: "ignoredGroup1,ignoredGroup2"
+ignoredGroupPrefixes: "ignoredGroupPrefix1,ignoredGroupPrefix2"
+kmsKeys:
+  - "arn:aws:kms:us-west-2:example-account:key/example-key"
+s3Buckets:
+  - "arn:aws:s3:::example/*"
+  - "arn:aws:s3:::example2/*"
+subnetIds:
+  - "subnet-example"
+sqs:
+  - "arn:aws:sqs:us-west-2:example-account:example-sqs-queue"
+sqsQueueName: "example-sqs-name"
+usernameKey: "example-username-key"
+vpcId: "example-vpc-id"

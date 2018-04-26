@@ -16,3 +16,4 @@ jspm_packages
 
 # Configuration files
 resources.yml
+config/resources-*.yml
