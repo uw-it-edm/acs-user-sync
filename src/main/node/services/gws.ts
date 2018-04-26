@@ -9,17 +9,22 @@ export class GWS {
     private key: string;          // key
     private passphrase: string;   // key passphrase
     private xml2js = require('xml-js');
+
     constructor(gwsSearchUrlBase, gwsGroupUrlBase, ca, cert, key, passphrase) {
         this.gwsSearchUrlBase = gwsSearchUrlBase;
         this.gwsGroupUrlBase = gwsGroupUrlBase;
         this.ca = ca;
         this.cert = cert;
         this.key = key;
-        this.passphrase  = passphrase;
+        this.passphrase = passphrase;
     }
 
-    private parseGroups(groupsStr: string): Group[] {
-        const jsonstrGroups = this.xml2js.xml2json(groupsStr, {compact: true, ignoreAttributes: false, spaces: 1});
+    parseGroups(groupsStr: string): Group[] {
+        const jsonstrGroups = this.xml2js.xml2json(groupsStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
         const jsonGroups = JSON.parse(jsonstrGroups);
         const jsonGroupList = jsonGroups.html.body.div.ul.li;
 
@@ -41,7 +46,11 @@ export class GWS {
     }
 
     private parseMembers(groupStr: string): string[] {
-        const jsonstrMembers = this.xml2js.xml2json(groupStr, {compact: true, ignoreAttributes: false, spaces: 1});
+        const jsonstrMembers = this.xml2js.xml2json(groupStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
         const jsonMembers = JSON.parse(jsonstrMembers);
 
         const jsonMemberList = jsonMembers.html.body.div.ul.li;
@@ -56,15 +65,19 @@ export class GWS {
     }
 
     parseUpdateMembers(groupStr: string): any {
-        const jsonstr= this.xml2js.xml2json(groupStr, {compact: true, ignoreAttributes: false, spaces: 1});
+        const jsonstr = this.xml2js.xml2json(groupStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
         const jsonobj = JSON.parse(jsonstr);
 
-        const retobj: any = {addMembers:[], deleteMembers:[], updateMembers:[]}
+        const retobj: any = {addMembers: [], deleteMembers: [], updateMembers: []}
         const group: any = jsonobj.group;
         if (group && group['add-members']) {
             const addMembers = group['add-members']['add-member']
             const addMembersArray = addMembers instanceof Array ? addMembers : [addMembers]
-            addMembersArray && addMembersArray.forEach((e)=>{
+            addMembersArray && addMembersArray.forEach((e) => {
                 retobj.addMembers.push(e._text);
                 retobj.updateMembers.push(e._text);
             });
@@ -73,7 +86,7 @@ export class GWS {
         if (group && group['delete-members']) {
             const deleteMembers = group['delete-members']['delete-member']
             const deleteMembersArray = deleteMembers instanceof Array ? deleteMembers : [deleteMembers]
-            deleteMembersArray && deleteMembersArray.forEach((e)=>{
+            deleteMembersArray && deleteMembersArray.forEach((e) => {
                 retobj.deleteMembers.push(e._text);
                 retobj.updateMembers.push(e._text);
             });
@@ -81,7 +94,7 @@ export class GWS {
         return retobj;
     }
 
-    async callGWS(url): Promise<any>  {
+    async callGWS(url): Promise<any> {
         const options = {
             url: url,
             agentOptions: {
@@ -107,13 +120,13 @@ export class GWS {
         return retv;
     }
 
-    async getGroups(username: string): Promise<any>  {
+    async getGroups(username: string): Promise<any> {
         const url = this.gwsSearchUrlBase + username;
         const body = await this.callGWS(url);
         return this.parseGroups(body);
     }
 
-    async getMembers(groupId: string): Promise<string[]>  {
+    async getMembers(groupId: string): Promise<string[]> {
         const url = this.gwsGroupUrlBase + groupId + '/effective_member';
         const body = await this.callGWS(url);
         return this.parseMembers(body);
