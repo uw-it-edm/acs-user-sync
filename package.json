@@ -4,16 +4,42 @@
   "description": "Serverless webpack example using Typescript",
   "main": "handler.js",
   "scripts": {
-    "test": "mocha -r ts-node/register ./**/*.spec.ts"
+    "test": "nyc mocha -r ts-node/register ./**/*.spec.ts",
+    "coveralls": "nyc yarn test && nyc report --reporter=text-lcov | coveralls"
+  },
+  "nyc": {
+    "include": [
+      "src/**/*.ts",
+      "src/**/*.tsx"
+    ],
+    "extension": [
+      ".ts",
+      ".tsx"
+    ],
+    "require": [
+      "ts-node/register"
+    ],
+    "reporter": [
+      "text-summary",
+      "html"
+    ],
+    "sourceMap": true,
+    "instrument": true
   },
   "devDependencies": {
     "@types/aws-lambda": "0.0.22",
+    "@types/mocha": "^5.2.0",
     "@types/node": "^9.4.0",
     "@types/request": "^2.47.0",
+    "chai": "^4.1.2",
+    "coveralls": "^3.0.0",
+    "istanbul": "^0.4.5",
     "js-yaml": "^3.10.0",
-    "serverless-mocha-plugin": "^1.7.0",
+    "mocha": "^5.1.1",
+    "nyc": "^11.7.1",
     "serverless-offline": "^3.18.0",
     "serverless-webpack": "^4.2.0",
+    "source-map-support": "^0.5.5",
     "ts-loader": "^2.3.7",
     "ts-node": "^5.0.1",
     "typescript": "^2.7.1",

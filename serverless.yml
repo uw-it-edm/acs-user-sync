@@ -15,16 +15,15 @@ provider:
   stage: "dev"
   region: "us-west-2"
   environment:
-    CONFIG_BUCKET: "${file(./resources.yml):CONFIG_BUCKET}" 
-    CONFIG_KEY: "${file(./resources.yml):${self:custom.stage}.CONFIG_KEY}"
-    authorizedIps: "${file(./resources.yml):${self:custom.stage}.authorizedIps}"
-    awsRegion: "${file(./resources.yml):awsRegion}"
-    emailDomain: "${file(./resources.yml):emailDomain}"
-    gwsKey: "${file(./resources.yml):gwsKey}"
-    sqsQueueName: "${file(./resources.yml):sqsQueueName}"
-    usernameKey: "${file(./resources.yml):usernameKey}"
-    ignoredGroups: "${file(./resources.yml):ignoredGroups}"
-    ignoredGroupPrefixes: "${file(./resources.yml):ignoredGroupPrefixes}"
+    CONFIG_BUCKET: "${file(./config/resources-${self:custom.stage}.yml):CONFIG_BUCKET}"
+    CONFIG_KEY: "${file(./config/resources-${self:custom.stage}.yml):CONFIG_KEY}"
+    awsRegion: "${file(./config/resources-${self:custom.stage}.yml):awsRegion}"
+    emailDomain: "${file(./config/resources-${self:custom.stage}.yml):emailDomain}"
+    gwsKey: "${file(./config/resources-${self:custom.stage}.yml):gwsKey}"
+    sqsQueueName: "${file(./config/resources-${self:custom.stage}.yml):sqsQueueName}"
+    usernameKey: "${file(./config/resources-${self:custom.stage}.yml):usernameKey}"
+    ignoredGroups: "${file(./config/resources-${self:custom.stage}.yml):ignoredGroups}"
+    ignoredGroupPrefixes: "${file(./config/resources-${self:custom.stage}.yml):ignoredGroupPrefixes}"
 
   iamRoleStatements:
     - Effect: "Allow"
@@ -36,17 +35,17 @@ provider:
     - Effect: "Allow"
       Action:
         - "kms:Decrypt"
-      Resource: ${file(./resources.yml):kmsKeys}
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):kmsKeys}
     - Effect: "Allow"
       Action:
         - "s3:GetObject"
-      Resource: ${file(./resources.yml):s3Buckets}
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):s3Buckets}
     - Effect: "Allow"
       Action:
         - sqs:DeleteMessage
         - sqs:GetQueueUrl
         - sqs:ReceiveMessage
-      Resource: ${file(./resources.yml):${self:custom.stage}.sqs}
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):sqs}
 
 plugins:
   - serverless-webpack
@@ -55,21 +54,12 @@ plugins:
 functions:
   sync-user:
     handler: src/main/node/handler.syncUser
-    events:
-      - http:
-          path: acs-user-sync
-          method: any 
-          integration: lambda-proxy
-          request:
-            parameters:
-              querystrings:
-                redirectPath: false
     memorySize: 256
     timeout: 20s
     vpc:
       securityGroupIds:
         - 'Ref': AcsUserSyncLambdaSecurityGroup
-      subnetIds: ${file(./resources.yml):${self:custom.stage}.subnetIds}
+      subnetIds: ${file(./config/resources-${self:custom.stage}.yml):subnetIds}
 
   cron:
     handler: src/main/node/handler.syncGroup
@@ -81,13 +71,13 @@ functions:
     vpc:
       securityGroupIds:
         - 'Ref': AcsUserSyncLambdaSecurityGroup
-      subnetIds: ${file(./resources.yml):${self:custom.stage}.subnetIds}
+      subnetIds: ${file(./config/resources-${self:custom.stage}.yml):subnetIds}
 
 resources:
   Resources:
     AcsUserSyncLambdaSecurityGroup:
       Type: "AWS::EC2::SecurityGroup"
-      Properties: ${file(./resources.yml):AcsUserSyncLambdaSecurityGroupProperties}
+      Properties: ${file(./config/resources-${self:custom.stage}.yml):AcsUserSyncLambdaSecurityGroupProperties}
 
 package:
   exclude:
