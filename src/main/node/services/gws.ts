@@ -1,36 +1,40 @@
-import * as request from "request-promise";
+import * as request from 'request-promise'
 import {Group} from '../model/group'
 
 export class GWS {
-    private gwsUrlPrefix: string;
+    private gwsSearchUrlBase: string;
+    private gwsGroupUrlBase: string;
     private ca: string;
     private cert: string;         // public cert
     private key: string;          // key
     private passphrase: string;   // key passphrase
     private xml2js = require('xml-js');
-    constructor(gwsUrlBase:string, ca:string, cert:string, key:string, passphrase:string) {
-        this.gwsUrlPrefix = gwsUrlBase + '/group_sws/v2/search?type=effective&stem=u_edms&member=';
+
+    constructor(gwsSearchUrlBase, gwsGroupUrlBase, ca, cert, key, passphrase) {
+        this.gwsSearchUrlBase = gwsSearchUrlBase;
+        this.gwsGroupUrlBase = gwsGroupUrlBase;
         this.ca = ca;
         this.cert = cert;
         this.key = key;
-        this.passphrase  = passphrase;
+        this.passphrase = passphrase;
     }
 
-    private parseGroups(groupsStr: string): Group[] {
-        // parse the return
-        let obj: any;
-        obj = this.xml2js.xml2json(groupsStr, {compact: true, ignoreAttributes: false, spaces: 1});
-        obj = JSON.parse(obj);
-        obj = obj.html.body.div.ul.li;
+    parseGroups(groupsStr: string): Group[] {
+        const jsonstrGroups = this.xml2js.xml2json(groupsStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
+        const jsonGroups = JSON.parse(jsonstrGroups);
+        const jsonGroupList = jsonGroups.html.body.div.ul.li;
 
-        let groups: Group[] = [];
-        let group: Group;
-        if (obj) {
-            obj.forEach((g) => {
-                group = new Group();
-                group.id = g.ul.li.a._text;
+        const groups: Group[] = [];
+        if (jsonGroupList) {
+            jsonGroupList.forEach((g) => {
+                const group = new Group();
+                group.id = g.ul.li.a._text;  // group Id is stored as text in anchor element.
                 groups.push(group);
-                let gdata = g.span;
+                const gdata = g.span;
                 gdata.forEach((e) => {
                     if (e._attributes.class == 'title') {
                         group.displayName = e._text;
@@ -41,8 +45,56 @@ export class GWS {
         return groups;
     }
 
-    async getGroups(userName: string): Promise<any>  {
-        const url = this.gwsUrlPrefix + userName;
+    private parseMembers(groupStr: string): string[] {
+        const jsonstrMembers = this.xml2js.xml2json(groupStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
+        const jsonMembers = JSON.parse(jsonstrMembers);
+
+        const jsonMemberList = jsonMembers.html.body.div.ul.li;
+
+        const members: string[] = [];
+        if (jsonMemberList) {
+            jsonMemberList.forEach((m) => {
+                members.push(m.a._text);
+            });
+        }
+        return members;
+    }
+
+    parseUpdateMembers(groupStr: string): any {
+        const jsonstr = this.xml2js.xml2json(groupStr, {
+            compact: true,
+            ignoreAttributes: false,
+            spaces: 1
+        });
+        const jsonobj = JSON.parse(jsonstr);
+
+        const retobj: any = {addMembers: [], deleteMembers: [], updateMembers: []}
+        const group: any = jsonobj.group;
+        if (group && group['add-members']) {
+            const addMembers = group['add-members']['add-member']
+            const addMembersArray = addMembers instanceof Array ? addMembers : [addMembers]
+            addMembersArray && addMembersArray.forEach((e) => {
+                retobj.addMembers.push(e._text);
+                retobj.updateMembers.push(e._text);
+            });
+        }
+
+        if (group && group['delete-members']) {
+            const deleteMembers = group['delete-members']['delete-member']
+            const deleteMembersArray = deleteMembers instanceof Array ? deleteMembers : [deleteMembers]
+            deleteMembersArray && deleteMembersArray.forEach((e) => {
+                retobj.deleteMembers.push(e._text);
+                retobj.updateMembers.push(e._text);
+            });
+        }
+        return retobj;
+    }
+
+    async callGWS(url): Promise<any> {
         const options = {
             url: url,
             agentOptions: {
@@ -57,13 +109,26 @@ export class GWS {
 
         await request.get(options, (err, response, body) => {
             if (err) {
-                console.log(new Date() + ' ERROR - GWS returned error for user ' + userName + ': ' + JSON.stringify(err))
+                delete err['options'];  // options could contain sensitive data
+                console.log('ERROR - GWS returned error : ' + JSON.stringify(err))
                 throw(err);
             } else {
-                retv = this.parseGroups(body);
+                retv = body;
             }
         });
 
         return retv;
+    }
+
+    async getGroups(username: string): Promise<any> {
+        const url = this.gwsSearchUrlBase + username;
+        const body = await this.callGWS(url);
+        return this.parseGroups(body);
+    }
+
+    async getMembers(groupId: string): Promise<string[]> {
+        const url = this.gwsGroupUrlBase + groupId + '/effective_member';
+        const body = await this.callGWS(url);
+        return this.parseMembers(body);
     }
 }

@@ -6,25 +6,24 @@ service: acs-user-sync
 
 custom:
   stage: ${opt:stage, self:provider.stage}
-  local:
-    CONFIG_KEY: "acs-user-sync/local/local-acs-user-sync.json"
-  dev:
-    CONFIG_KEY: "acs-user-sync/dev/dev-acs-user-sync.json"
-  test:
-    CONFIG_KEY: "acs-user-sync/test/test-acs-user-sync"
-  prod:
-    CONFIG_KEY: "acs-user-sync/prod/prod-acs-user-sync.json"
 
 provider:
   name: aws
   runtime: nodejs6.10
   memorySize: 128
-  timeout: 10
+  timeout: 20
   stage: "dev"
   region: "us-west-2"
   environment:
-    CONFIG_BUCKET: "uwit-cs-all-config"
-    CONFIG_KEY: "${self:custom.${self:custom.stage}.CONFIG_KEY}"
+    CONFIG_BUCKET: "${file(./config/resources-${self:custom.stage}.yml):CONFIG_BUCKET}"
+    CONFIG_KEY: "${file(./config/resources-${self:custom.stage}.yml):CONFIG_KEY}"
+    awsRegion: "${file(./config/resources-${self:custom.stage}.yml):awsRegion}"
+    emailDomain: "${file(./config/resources-${self:custom.stage}.yml):emailDomain}"
+    gwsKey: "${file(./config/resources-${self:custom.stage}.yml):gwsKey}"
+    sqsQueueName: "${file(./config/resources-${self:custom.stage}.yml):sqsQueueName}"
+    usernameKey: "${file(./config/resources-${self:custom.stage}.yml):usernameKey}"
+    ignoredGroups: "${file(./config/resources-${self:custom.stage}.yml):ignoredGroups}"
+    ignoredGroupPrefixes: "${file(./config/resources-${self:custom.stage}.yml):ignoredGroupPrefixes}"
 
   iamRoleStatements:
     - Effect: "Allow"
@@ -36,32 +35,49 @@ provider:
     - Effect: "Allow"
       Action:
         - "kms:Decrypt"
-      Resource: ${file(./resources.yml):kmsKeys}
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):kmsKeys}
     - Effect: "Allow"
       Action:
         - "s3:GetObject"
-      Resource: ${file(./resources.yml):s3Buckets}
-
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):s3Buckets}
+    - Effect: "Allow"
+      Action:
+        - sqs:DeleteMessage
+        - sqs:GetQueueUrl
+        - sqs:ReceiveMessage
+      Resource: ${file(./config/resources-${self:custom.stage}.yml):sqs}
 
 plugins:
-  - serverless-mocha-plugin
   - serverless-webpack
   - serverless-offline
 
 functions:
   sync-user:
     handler: src/main/node/handler.syncUser
-    events:
-      - http:
-          path: acs/user/{username}/sync
-          method: post
-          integration: lambda
-          request:
-            parameters: 
-              paths: 
-                username: true
     memorySize: 256
     timeout: 20s
+    vpc:
+      securityGroupIds:
+        - 'Ref': AcsUserSyncLambdaSecurityGroup
+      subnetIds: ${file(./config/resources-${self:custom.stage}.yml):subnetIds}
+
+  cron:
+    handler: src/main/node/handler.syncGroup
+    events:
+      - schedule: rate(10 minutes)
+        enabled: true
+    memorySize: 256
+    timeout: 20s
+    vpc:
+      securityGroupIds:
+        - 'Ref': AcsUserSyncLambdaSecurityGroup
+      subnetIds: ${file(./config/resources-${self:custom.stage}.yml):subnetIds}
+
+resources:
+  Resources:
+    AcsUserSyncLambdaSecurityGroup:
+      Type: "AWS::EC2::SecurityGroup"
+      Properties: ${file(./config/resources-${self:custom.stage}.yml):AcsUserSyncLambdaSecurityGroupProperties}
 
 package:
   exclude:
@@ -69,3 +85,4 @@ package:
     - node_modules/aws-sdk-mock/**
     - node_modules/serverless/**
     - src/main/resources/**
+    - src/main/**/*.spec.ts
