@@ -108,7 +108,7 @@ async function syncOneUser(username) {
 
 ///////////////////////////////////////////////////////////
 // handler functions
-export const syncUser: Handler = async (event: APIGatewayEvent, context: Context, callback: Callback) => {
+export const syncUser: Handler = async (event: any, context: Context, callback: Callback) => {
     const headers = (event && event.headers) ? event.headers : undefined;
     let response: any;
     if (headers && headers[usernameKey]) {

@@ -5,7 +5,7 @@ import {ACS} from './services/acs';
 import {GWS} from './services/gws';
 import {PWS} from './services/pws';
 import {SQS} from "./services/sqs";
-import {APIGatewayEvent} from "aws-lambda";
+import {APIGatewayEvent, APIGatewayProxyEvent} from "aws-lambda";
 import {Group} from "./model/group";
 import {User} from "./model/user";
 
@@ -25,25 +25,23 @@ describe('handler', () => {
     handler.sqs = instance(sqsMock);
     handler.gwsKey = 'ABCDEFGHGHIJKLMNOPAXAA==';  // key for the test message only, not used anywhere else.
     handler.config = {test: 'test'};
-    const gateWayEvent1: APIGatewayEvent = {
+    const gateWayEvent1 = {
         requestContext: {
         }
     };
 
-    const gateWayEvent2: APIGatewayEvent = {
+    const gateWayEvent2 = {
         headers: {'x-username': 'testuser'},
         requestContext: {
         }
     };
 
     // test user
-    const testuser: User = {
-        userName: 'testuser',
-        firstName: 'First',
-        lastName: 'Last',
-        email: 'testuser@demo.com'
-    };
-
+    const testuser: User = new User();
+    testuser.userName = 'testuser';
+    testuser.firstName = 'First';
+    testuser.lastName = 'Last';
+    testuser.email = 'testuser@demo.com';
 
     // test groups
     const testgroups: Group[] = [
@@ -93,8 +91,8 @@ describe('handler', () => {
         });
 
         it('should return 422 when userId not found in users or groups', async () => {
-            when(pwsMock.getUser(testuser.userName)).thenReturn(null);
-            when(gwsMock.getGroups(testuser.userName)).thenReturn([]);
+            when(pwsMock.getUser(testuser.userName)).thenReturn(Promise.resolve(null));
+            when(gwsMock.getGroups(testuser.userName)).thenReturn(Promise.resolve([]));
 
             await handler.syncUser(gateWayEvent2, null, (x, response) => {
                 expect(response.statusCode).to.equal(422);
@@ -102,8 +100,8 @@ describe('handler', () => {
             });
         });
         it('should return 200 OK', async () => {
-            when(pwsMock.getUser(testuser.userName)).thenReturn(testuser);
-            when(gwsMock.getGroups(testuser.userName)).thenReturn(testgroups);
+            when(pwsMock.getUser(testuser.userName)).thenReturn(Promise.resolve(testuser));
+            when(gwsMock.getGroups(testuser.userName)).thenReturn(Promise.resolve(testgroups));
 
             await handler.syncUser(gateWayEvent2, null, (x, response) => {
                 expect(response.statusCode).to.equal(200);
@@ -113,7 +111,7 @@ describe('handler', () => {
 
     describe('syncGroup function', () => {
         it('should return 200 OK', async () => {
-            when(sqsMock.getMessages()).thenReturn(testMsgs);
+            when(sqsMock.getMessages()).thenReturn(Promise.resolve(testMsgs));
             when(gwsMock.parseUpdateMembers(anything())).thenReturn({
                 addMembers: ['tuser1'],
                 deleteMembers: [],
