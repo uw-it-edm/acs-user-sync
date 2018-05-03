@@ -218,8 +218,7 @@ async function processOneMessage(sqsMessage: any) {
     const action = msgContext.action;                // 'update-member', etc.
     const group = msgContext.group;                  // group ID
 
-    // delete SQS message, before receiptHandle expires
-    await sqs.deleteMessage(receiptHandle);
+
 
     if (action && action == 'update-members' && group && !isIgnoredGroup(group)) {
         console.log('INFO - process action=' + action + ', group=' + group);
@@ -246,12 +245,14 @@ async function processOneMessage(sqsMessage: any) {
     } else {
         console.log('INFO - ignore action=' + action + ', group=' + group);
     }
+    // delete SQS message
+    await sqs.deleteMessage(receiptHandle);
 }
 
 async function processSqsMessages() {
     // initialize sqs service if necessary
     if (!sqs) {
-        sqs = new SQS(awsRegion, sqsQueueName, 1);
+        sqs = new SQS(awsRegion, sqsQueueName, 10);
     }
 
     let hasMessages = true;

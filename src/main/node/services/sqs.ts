@@ -12,8 +12,8 @@ export class SQS {
             QueueUrl: null,
             AttributeNames: [ 'All' ],
             MaxNumberOfMessages: maxNumberOfMessages,
-            VisibilityTimeout: 0,
-            WaitTimeSeconds: 0
+            VisibilityTimeout: 30,
+            WaitTimeSeconds: 20
         };
     }
 
