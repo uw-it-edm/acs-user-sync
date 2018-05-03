@@ -64,7 +64,7 @@ functions:
   cron:
     handler: src/main/node/handler.syncGroup
     events:
-      - schedule: rate(1 minutes)
+      - schedule: rate(1 minute)
         enabled: true
     memorySize: 256
     timeout: 5m
