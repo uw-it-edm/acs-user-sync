@@ -159,7 +159,6 @@ const ignoredGroupsStr = process.env.ignoredGroups || '';
 const ignoredGroups = ignoredGroupsStr.replace(/\s/g, '').toLowerCase().split(',');
 const ignoredGroupPrefixesStr = process.env.ignoredGroupPrefixes || '';
 const ignoredGroupPrefixes = ignoredGroupPrefixesStr.replace(/\s/g, '').toLowerCase().split(',');
-const messagesPerBatch = process.env.messagesPerBatch || 10;
 
 function isIgnoredGroup(group) {
     // check for ignoredGroupPrefixes
@@ -256,7 +255,7 @@ async function processSqsMessages() {
     }
 
     let hasMessages = true;
-    for (let i = 0; i < messagesPerBatch && hasMessages; i++) {
+    while ( hasMessages) {
         let msgResult = await sqs.getMessages();
         if (msgResult && msgResult.Messages) {
             let msgs = msgResult.Messages;
