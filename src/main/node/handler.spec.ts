@@ -111,7 +111,7 @@ describe('handler', () => {
 
     describe('syncGroup function', () => {
         it('should return 200 OK', async () => {
-            when(sqsMock.getMessages()).thenReturn(Promise.resolve(testMsgs));
+            when(sqsMock.getMessages()).thenReturn(Promise.resolve(testMsgs)).thenReturn(Promise.resolve(null));
             when(gwsMock.parseUpdateMembers(anything())).thenReturn({
                 addMembers: ['tuser1'],
                 deleteMembers: [],
