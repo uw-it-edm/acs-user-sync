@@ -9,7 +9,7 @@ custom:
 
 provider:
   name: aws
-  runtime: nodejs8.10
+  runtime: nodejs6.10
   memorySize: 128
   timeout: 20
   stage: "dev"
