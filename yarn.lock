@@ -116,9 +116,9 @@
   version "9.6.6"
   resolved "https://registry.yarnpkg.com/@types/node/-/node-9.6.6.tgz#439b91f9caf3983cad2eef1e11f6bedcbf9431d2"
 
-"@types/node@~8.10.0":
-  version "8.10.11"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-8.10.11.tgz#971ea8cb91adbe0b74e3fbd867dec192d5893a5f"
+"@types/node@~8.10.27":
+  version "8.10.27"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-8.10.27.tgz#667d03fcd44d8683de5459b8ecd80506eee65f0e"
 
 "@types/request@^2.47.1":
   version "2.47.1"
@@ -414,9 +414,9 @@ atob@^2.0.0:
   version "2.1.0"
   resolved "https://registry.yarnpkg.com/atob/-/atob-2.1.0.tgz#ab2b150e51d7b122b9efc8d7340c06b6c41076bc"
 
-aws-sdk@^2.228.0, aws-sdk@^2.300.0:
-  version "2.300.0"
-  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.300.0.tgz#862f993151b1d8c96f58a5c04aef562e04d56c6a"
+aws-sdk@^2.228.0, aws-sdk@^2.301.0:
+  version "2.301.0"
+  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.301.0.tgz#de397aed05b36aa4547b7936e2290799c5c35cfc"
   dependencies:
     buffer "4.9.1"
     events "1.1.1"
