@@ -50,7 +50,7 @@
   "dependencies": {
     "async": "^2.6.0",
     "aws-sdk": "^2.308.0",
-    "request": "^2.83.0",
+    "request": "^2.88.0",
     "request-promise": "^4.2.2",
     "serverless": "^1.30.3",
     "ts-mockito": "^2.3.1",
