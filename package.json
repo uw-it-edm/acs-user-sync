@@ -37,7 +37,7 @@
     "js-yaml": "^3.10.0",
     "mocha": "^5.1.1",
     "nyc": "^13.0.1",
-    "serverless-offline": "^3.25.14",
+    "serverless-offline": "^3.25.17",
     "serverless-webpack": "^5.2.0",
     "source-map-support": "^0.5.9",
     "ts-loader": "^5.1.1",
