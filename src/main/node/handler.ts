@@ -108,7 +108,7 @@ async function syncOneUser(username) {
 
 ///////////////////////////////////////////////////////////
 // handler functions
-export const syncUser: Handler = async (event: APIGatewayEvent, context: Context, callback: Callback) => {
+export const syncUser: Handler = async (event: any, context: Context, callback: Callback) => {
     const headers = (event && event.headers) ? event.headers : undefined;
     let response: any;
     if (headers && headers[usernameKey]) {
@@ -159,7 +159,6 @@ const ignoredGroupsStr = process.env.ignoredGroups || '';
 const ignoredGroups = ignoredGroupsStr.replace(/\s/g, '').toLowerCase().split(',');
 const ignoredGroupPrefixesStr = process.env.ignoredGroupPrefixes || '';
 const ignoredGroupPrefixes = ignoredGroupPrefixesStr.replace(/\s/g, '').toLowerCase().split(',');
-const messagesPerBatch = process.env.messagesPerBatch || 10;
 
 function isIgnoredGroup(group) {
     // check for ignoredGroupPrefixes
@@ -219,8 +218,7 @@ async function processOneMessage(sqsMessage: any) {
     const action = msgContext.action;                // 'update-member', etc.
     const group = msgContext.group;                  // group ID
 
-    // delete SQS message, before receiptHandle expires
-    await sqs.deleteMessage(receiptHandle);
+
 
     if (action && action == 'update-members' && group && !isIgnoredGroup(group)) {
         console.log('INFO - process action=' + action + ', group=' + group);
@@ -247,16 +245,18 @@ async function processOneMessage(sqsMessage: any) {
     } else {
         console.log('INFO - ignore action=' + action + ', group=' + group);
     }
+    // delete SQS message
+    await sqs.deleteMessage(receiptHandle);
 }
 
 async function processSqsMessages() {
     // initialize sqs service if necessary
     if (!sqs) {
-        sqs = new SQS(awsRegion, sqsQueueName, 1);
+        sqs = new SQS(awsRegion, sqsQueueName, 10);
     }
 
     let hasMessages = true;
-    for (let i = 0; i < messagesPerBatch && hasMessages; i++) {
+    while ( hasMessages) {
         let msgResult = await sqs.getMessages();
         if (msgResult && msgResult.Messages) {
             let msgs = msgResult.Messages;
