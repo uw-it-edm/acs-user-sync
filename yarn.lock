@@ -135,9 +135,9 @@
     ramda "^0.25.0"
     source-map-support "^0.5.5"
 
-"@types/aws-lambda@8.10.14":
-  version "8.10.14"
-  resolved "https://registry.yarnpkg.com/@types/aws-lambda/-/aws-lambda-8.10.14.tgz#979eaa4abafff8de93854fe5cc1ae6e0bb888913"
+"@types/aws-lambda@8.10.15":
+  version "8.10.15"
+  resolved "https://registry.yarnpkg.com/@types/aws-lambda/-/aws-lambda-8.10.15.tgz#ea7094e9cacbcfa5e1b6b15baa12b7a438857fc7"
 
 "@types/caseless@*":
   version "0.12.1"
