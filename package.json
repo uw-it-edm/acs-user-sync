@@ -52,7 +52,7 @@
     "aws-sdk": "^2.334.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.2",
-    "serverless": "^1.32.0",
+    "serverless": "^1.33.1",
     "ts-mockito": "^2.3.1",
     "xml-js": "^1.6.8"
   }
