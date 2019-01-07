@@ -65,7 +65,7 @@ functions:
     handler: src/main/node/handler.syncGroup
     events:
       - schedule: rate(1 minute)
-        enabled: false
+        enabled: "${file(./config/resources-${self:custom.stage}.yml):enableGroupSyncCron}"
     memorySize: 256
     timeout: 300 #seconds
     vpc:
