@@ -7,6 +7,7 @@ const HTTP_STATUS_CODE_FOR_NOT_FOUND = 404;
 export class ACS {
     private acsUrlPrefix: string;
     private auth: any;
+    private request: any;
     static readonly UW_ROOT_GROUP_ID = 'uw_groups';
     constructor(acsUrlBase:string, adminUser:string, adminPassword:string) {
         this.acsUrlPrefix = acsUrlBase + '/alfresco/service/api';
@@ -14,6 +15,9 @@ export class ACS {
             'user': adminUser,
             'pass': adminPassword
         };
+
+        // request to support session cookie
+        this.request = require("request-promise").defaults({jar: true});
     }
 
     private logError(err:any, msg) {
@@ -28,7 +32,7 @@ export class ACS {
             url: this.acsUrlPrefix + '/people',
             auth: this.auth
         }
-        await request.post(options).json(user)
+        await this.request.post(options).json(user)
         .catch((err) => {
             if ( err.statusCode == 409 ) {
                 // user already exists, noop
@@ -46,7 +50,7 @@ export class ACS {
             url: this.acsUrlPrefix + '/people/' + username + (wantGroups ? '?groups=true' : ''),
             auth: this.auth
         }
-        await request.get(options, (err, response, body) => {
+        await this.request.get(options, (err, response, body) => {
             retv = JSON.parse(body);
             if ( retv && retv.status && retv.status.code && retv.status.code==HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 retv = null;
@@ -77,7 +81,7 @@ export class ACS {
             url: this.acsUrlPrefix + '/groups/' + groupId+ '/children?authorityType=USER',
             auth: this.auth
         }
-        await request.get(options, (err, response, body) => {
+        await this.request.get(options, (err, response, body) => {
             retv = JSON.parse(body).data;
         })
         .catch((err) => {
@@ -97,7 +101,7 @@ export class ACS {
             url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
         }
-        await request.post(options).json(body)
+        await this.request.post(options).json(body)
         .catch((err) => {
             if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 // group does not exist, let caller create it first 
@@ -117,7 +121,7 @@ export class ACS {
             url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
             auth: this.auth
         }
-        await request.delete(options)
+        await this.request.delete(options)
         .catch((err) => {
             if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
                 console.log('WARN - deleteMember: ' + groupId + ', does not exist. treat this call as noop')
