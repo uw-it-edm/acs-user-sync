@@ -45,6 +45,8 @@ async function errorCallback(callback, statusCode, message) {
 // init
 async function init(): Promise<any> {
     if (config) {
+        // reinitialize ACS client to start a new session
+        acs.resetCookieJar();
         return config;
     }
 
