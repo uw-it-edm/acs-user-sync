@@ -26,6 +26,11 @@ export class ACS {
         console.log((msg ? msg : '') + ' ' + JSON.stringify(err));
     }
 
+    // reset jar
+    resetCookieJar() {
+       this.request.defaults({jar: request.jar()});
+    }
+
     // create a new user
     async createUser(user: User): Promise<void>  {
         const options = {
