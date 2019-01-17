@@ -89,7 +89,7 @@ async function syncOneUser(username) {
     // handle shared netid
     if (!user && (groups && groups.length > 0)) {
         user = new User();
-        user.userName = username;
+        user.id = username;
         user.firstName = username;
         user.lastName = username;
         user.email = username + emailDomain;
@@ -98,7 +98,12 @@ async function syncOneUser(username) {
     if (!user) {
         throw new Error("Unable to identify User or Groups synchronization.");
     }
+
     // call acs to create new user
+    // password is required by Alfresco public API
+    // generate a random string of at least 8 characters
+    const randomInt = Math.floor(100000000000*Math.random()) + 1000000000;
+    user.password = randomInt.toString(36); // convert to base 36 to have letters and digits in string
     await acs.createUser(user);
 
     // add user to groups
