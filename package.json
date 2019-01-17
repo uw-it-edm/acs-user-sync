@@ -27,7 +27,7 @@
     "instrument": true
   },
   "devDependencies": {
-    "@types/aws-lambda": "8.10.14",
+    "@types/aws-lambda": "8.10.17",
     "@types/mocha": "^5.2.5",
     "@types/node": "~8.10.36",
     "@types/request": "^2.47.1",
