@@ -10,6 +10,7 @@ awsRegion: "us-west-2"
 CONFIG_BUCKET: "example-config-bucket"
 CONFIG_KEY: "example-acs-user-sync.json"
 emailDomain: "@example.com"
+enableGroupSyncCron: false
 gwsKey: "exampleEncryptionKey"
 ignoredGroups: "ignoredGroup1,ignoredGroup2"
 ignoredGroupPrefixes: "ignoredGroupPrefix1,ignoredGroupPrefix2"
