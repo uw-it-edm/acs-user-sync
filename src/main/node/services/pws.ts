@@ -20,7 +20,7 @@ export class PWS {
     parseUser(userStr: string): User {
         let obj = JSON.parse(userStr);
         let user = new User();
-        user.userName = obj.UWNetID;
+        user.id = obj.UWNetID;
         user.firstName = obj.RegisteredFirstMiddleName;
         user.lastName = obj.RegisteredSurname;
         user.email = obj.UWNetID + '@uw.edu';

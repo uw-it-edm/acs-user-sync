@@ -10,7 +10,7 @@ export class ACS {
     private request: any;
     static readonly UW_ROOT_GROUP_ID = 'uw_groups';
     constructor(acsUrlBase:string, adminUser:string, adminPassword:string) {
-        this.acsUrlPrefix = acsUrlBase + '/alfresco/service/api';
+        this.acsUrlPrefix = acsUrlBase + '/alfresco/api/-default-/public/alfresco/versions/1';
         this.auth = {
             'user': adminUser,
             'pass': adminPassword
@@ -42,17 +42,17 @@ export class ACS {
             if ( err.statusCode == 409 ) {
                 // user already exists, noop
             } else {
-                this.logError(err, 'ERROR - createUser returned error for user ' + user.userName);
+                this.logError(err, 'ERROR - createUser returned error for user ' + user.id);
                 throw(err);
             }
         });
     }
 
     // get user 
-    async getUser(username: string, wantGroups:boolean=false): Promise<any>  {
+    async getUser(username: string): Promise<any>  {
         let retv: any = null;
         const options = {
-            url: this.acsUrlPrefix + '/people/' + username + (wantGroups ? '?groups=true' : ''),
+            url: this.acsUrlPrefix + '/people/' + username,
             auth: this.auth
         }
         await this.request.get(options, (err, response, body) => {
@@ -75,35 +75,55 @@ export class ACS {
 
     // get user groups 
     async getUserGroups(username: string): Promise<any>  {
-        const user:any = await this.getUser(username, true);
-        return (user && user.groups && user.groups);
+        let retv: any = null;
+        const options = {
+            url: this.acsUrlPrefix + '/people/' + username + '/groups?fields=id&maxItems=1000',
+            auth: this.auth
+        }
+        await this.request.get(options, (err, response, body) => {
+            retv = JSON.parse(body);
+            if ( retv && retv.status && retv.status.code && retv.status.code==HTTP_STATUS_CODE_FOR_NOT_FOUND ) {
+                retv = null;
+            }
+        })
+        .catch((err) => {
+            if ( err.statusCode && err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) {
+                retv = null;
+            } else {
+                this.logError(err, 'ERROR - getUserGroups returned error for user ' + username)
+                throw(err);
+            }
+        });
+
+        return (retv && retv.list && retv.list.entries);
     }
 
     // get members of a group 
     async getMembers(groupId: string): Promise<any>  {
-        let retv: string[] = [];
+        const gid = groupId.startsWith('GROUP_') ? groupId : 'GROUP_' + groupId;
+        let retv: any = [];
         const options = {
-            url: this.acsUrlPrefix + '/groups/' + groupId+ '/children?authorityType=USER',
+            url: this.acsUrlPrefix + '/groups/' + gid+ "/members?where=(memberType='PERSON')",
             auth: this.auth
         }
         await this.request.get(options, (err, response, body) => {
-            retv = JSON.parse(body).data;
+            retv = JSON.parse(body);
         })
         .catch((err) => {
-                this.logError(err, 'ERROR 2 - getMembers returned error for group ' + groupId)
-                throw(err);
+            this.logError(err, 'ERROR - getMembers returned error for group ' + groupId)
+            throw(err);
         });
 
-        return retv;
+        return (retv && retv.list && retv.list.entries);
     }
 
     // displayName is null for a person, but may be set for a group member.
-    async addMember(groupId:string, memberId:string, displayName:string = ''): Promise<void> {
-        const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
+    async addMember(groupId:string, memberId:string, displayName:string = '', memberType='PERSON'): Promise<void> {
+        const gid = groupId.startsWith('GROUP_') ? groupId : 'GROUP_' + groupId;
         console.log('INFO - add ' + memberId + ' to group ' + groupId);
-        let body = displayName ? { displayName: displayName } : {};
+        let body = { id: memberId, displayName: displayName, memberType: memberType };
         const options = {
-            url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
+            url: this.acsUrlPrefix + '/groups/' + gid + '/members',
             auth: this.auth
         }
         await this.request.post(options).json(body)
@@ -120,10 +140,10 @@ export class ACS {
     }
 
     async deleteMember(groupId:string, memberId:string): Promise<void> {
-        const gid = groupId.startsWith('GROUP_') ? groupId.substring('GROUP_'.length) : groupId;
+        const gid = groupId.startsWith('GROUP_') ? groupId : 'GROUP_' + groupId;
         console.log('INFO - delete ' + memberId + ' from group ' + gid);
         const options = {
-            url: this.acsUrlPrefix + '/groups/' + gid + '/children/' + memberId,
+            url: this.acsUrlPrefix + '/groups/' + gid + '/members/' + memberId,
             auth: this.auth
         }
         await this.request.delete(options)
@@ -144,7 +164,7 @@ export class ACS {
         // find diff of the two groups
         const gmap = new Map<string, string>();
         existingGroups.forEach((g) => {
-            gmap.set(g.itemName, '');  // empty displayName indicates existing group
+            gmap.set(g.entry.id, '');  // empty group ID indicates existing group
         });
 
         groups.forEach((g) => {
@@ -161,7 +181,7 @@ export class ACS {
                 await this.addMember(key, userName)
                 .catch(async (err)=>{
                     if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
-                        await this.addMember(ACS.UW_ROOT_GROUP_ID, key, value)
+                        await this.addMember(ACS.UW_ROOT_GROUP_ID, key, value, 'GROUP')
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
                         this.logError(err, 'ERROR - addMember(' + key + ',' + userName + ') returned error: ')
@@ -187,7 +207,7 @@ export class ACS {
         // find diff of the two member list 
         const mmap = new Map<string, string>();
         acsMembers && acsMembers.forEach((m) => {
-            mmap.set(m.shortName, 'acs');  // user in acs group
+            mmap.set(m.entry.id, 'acs');  // user in acs group
         });
 
         gwsMembers.forEach((m) => {
