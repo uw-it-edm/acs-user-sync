@@ -110,7 +110,7 @@ export class ACS {
             retv = JSON.parse(body);
         })
         .catch((err) => {
-            this.logError(err, 'ERROR 2 - getMembers returned error for group ' + groupId)
+            this.logError(err, 'ERROR - getMembers returned error for group ' + groupId)
             throw(err);
         });
 
