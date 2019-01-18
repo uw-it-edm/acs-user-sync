@@ -18,7 +18,7 @@ describe('PWS', () => {
     describe('parseUser function', () => {
         it('should resolve with the input username', async () => {
             const user: User = await service.parseUser(userStr);
-            expect(user.userName).to.equal('tusername');
+            expect(user.id).to.equal('tusername');
             expect(user.firstName).to.equal('Tfirst');
             expect(user.lastName).to.equal('Tlast');
         });
