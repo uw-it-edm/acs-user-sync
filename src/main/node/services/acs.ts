@@ -3,6 +3,7 @@ import {User} from "../model/user";
 import {Group} from "../model/group";
 
 const HTTP_STATUS_CODE_FOR_NOT_FOUND = 404;
+const HTTP_STATUS_CODE_FOR_CONFLICT = 409;
 
 export class ACS {
     private acsUrlPrefix: string;
@@ -39,7 +40,7 @@ export class ACS {
         }
         await this.request.post(options).json(user)
         .catch((err) => {
-            if ( err.statusCode == 409 ) {
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_CONFLICT) {
                 // user already exists, noop
             } else {
                 this.logError(err, 'ERROR - createUser returned error for user ' + user.id);
@@ -157,6 +158,24 @@ export class ACS {
         });
     }
 
+    async createGroup(id, displayName, parentId='GROUP_uw_groups') {
+        console.log('INFO - create group ' + id );
+        let body = { id: id, displayName: displayName, parentIds: [parentId]};
+        const options = {
+            url: this.acsUrlPrefix + '/groups',
+            auth: this.auth
+        }
+        await this.request.post(options).json(body)
+        .catch((err) => {
+            if ( err.statusCode == HTTP_STATUS_CODE_FOR_CONFLICT) {
+                console.log('WARN - createGroup: ' + id + ' already exists.');
+            } else {
+                this.logError(err, 'ERROR - createGroup(' + id + ',' + displayName+ ','+ parentId + ') returned error. error statusCode='+err.statusCode);
+                throw(err);
+            }
+        });
+    }
+
     // sync ACS groups to UW groups for a given user
     async syncUserGroups(userName: string, groups: Group[]): Promise<void> {
         const existingGroups = await this.getUserGroups(userName);
@@ -181,7 +200,7 @@ export class ACS {
                 await this.addMember(key, userName)
                 .catch(async (err)=>{
                     if ( err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
-                        await this.addMember(ACS.UW_ROOT_GROUP_ID, key, value, 'GROUP')
+                        await this.createGroup(key, value)
                         .then(() => { this.addMember(key, userName, value);}); // try again
                     } else {  // unknown error
                         this.logError(err, 'ERROR - addMember(' + key + ',' + userName + ') returned error: ')
@@ -197,9 +216,9 @@ export class ACS {
     // sync ACS group members to UW group members 
     async syncGroupMembers(groupId: string, gwsMembers: string[]): Promise<void> {
         const acsMembers = await this.getMembers(groupId)
-                           .catch((err)=> { 
+                           .catch(async (err)=> { 
                                if (err.statusCode == HTTP_STATUS_CODE_FOR_NOT_FOUND) { // group does not exist, need to create it first
-                                   this.addMember(ACS.UW_ROOT_GROUP_ID, 'GROUP_' + groupId, groupId)
+                                   await this.createGroup(groupId, groupId)
                                    .then(() => { this.getMembers(groupId);}); // try again
                                }
                            });
