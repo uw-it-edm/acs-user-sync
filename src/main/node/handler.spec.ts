@@ -38,7 +38,7 @@ describe('handler', () => {
 
     // test user
     const testuser: User = new User();
-    testuser.userName = 'testuser';
+    testuser.id = 'testuser';
     testuser.firstName = 'First';
     testuser.lastName = 'Last';
     testuser.email = 'testuser@demo.com';
@@ -91,8 +91,8 @@ describe('handler', () => {
         });
 
         it('should return 422 when userId not found in users or groups', async () => {
-            when(pwsMock.getUser(testuser.userName)).thenReturn(Promise.resolve(null));
-            when(gwsMock.getGroups(testuser.userName)).thenReturn(Promise.resolve([]));
+            when(pwsMock.getUser(testuser.id)).thenReturn(Promise.resolve(null));
+            when(gwsMock.getGroups(testuser.id)).thenReturn(Promise.resolve([]));
 
             await handler.syncUser(gateWayEvent2, null, (x, response) => {
                 expect(response.statusCode).to.equal(422);
@@ -100,8 +100,8 @@ describe('handler', () => {
             });
         });
         it('should return 200 OK', async () => {
-            when(pwsMock.getUser(testuser.userName)).thenReturn(Promise.resolve(testuser));
-            when(gwsMock.getGroups(testuser.userName)).thenReturn(Promise.resolve(testgroups));
+            when(pwsMock.getUser(testuser.id)).thenReturn(Promise.resolve(testuser));
+            when(gwsMock.getGroups(testuser.id)).thenReturn(Promise.resolve(testgroups));
 
             await handler.syncUser(gateWayEvent2, null, (x, response) => {
                 expect(response.statusCode).to.equal(200);
