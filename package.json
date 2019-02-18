@@ -48,7 +48,7 @@
   "author": "The serverless webpack authors (https://github.com/elastic-coders/serverless-webpack)",
   "license": "MIT",
   "dependencies": {
-    "async": "^2.6.1",
+    "async": "^2.6.2",
     "aws-sdk": "^2.395.0",
     "request": "^2.88.0",
     "request-promise": "^4.2.2",
