@@ -1,3 +1,4 @@
+# DEPRECATED - This project is deprecated and no longer maintained
 
 # acs-user-sync
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/b023bc9563e1426fb457e9e4eaf2ce45)](https://app.codacy.com/app/uw-it-edm/acs-user-sync?utm_source=github.com&utm_medium=referral&utm_content=uw-it-edm/acs-user-sync&utm_campaign=Badge_Grade_Dashboard)
